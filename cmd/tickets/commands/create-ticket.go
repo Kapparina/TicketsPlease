@@ -9,6 +9,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/kapparina/ticketsplease/cmd/tickets"
+	"github.com/kapparina/ticketsplease/cmd/utils"
 )
 
 var (
@@ -19,6 +20,34 @@ var (
 	MaxTicketContentLength    = 1000
 	MaxTicketContentLengthPtr = &MaxTicketContentLength
 )
+
+func getSupportChannelOverrides(b *tickets.Bot, guildID snowflake.ID) []discord.PermissionOverwrite {
+	var overrides discord.PermissionOverwrites
+	roles, roleErr := b.Client.Rest().GetRoles(guildID)
+	if roleErr != nil {
+		return nil
+	}
+	filteredRoles := utils.FilterRoles(roles, utils.Moderation)
+	for _, r := range filteredRoles {
+		o := discord.RolePermissionOverwrite{
+			RoleID: r,
+			Allow:  discord.PermissionsAllThread,
+			Deny:   discord.PermissionsNone,
+		}
+		overrides = append(overrides, o)
+	}
+	overrides = append(overrides, discord.RolePermissionOverwrite{
+		RoleID: guildID,
+		Allow: discord.PermissionSendMessagesInThreads |
+			discord.PermissionViewChannel,
+		Deny: discord.PermissionReadMessageHistory |
+			discord.PermissionManageThreads |
+			discord.PermissionCreatePublicThreads |
+			discord.PermissionCreatePrivateThreads |
+			discord.PermissionSendMessages,
+	})
+	return overrides
+}
 
 var createTicket = discord.SlashCommandCreate{
 	Name:        "ticket",
@@ -38,7 +67,7 @@ var createTicket = discord.SlashCommandCreate{
 				}
 				return choices
 			}(),
-			Autocomplete: false,
+			Autocomplete: true,
 		},
 		discord.ApplicationCommandOptionString{
 			Name:        "subject",
@@ -64,6 +93,9 @@ var createTicket = discord.SlashCommandCreate{
 
 func CreateTicketHandler(b *tickets.Bot) handler.CommandHandler {
 	return func(e *handler.CommandEvent) error {
+		supportChannelName := "support-tickets"
+		supportChannelTopic := "Support tickets & suggestions"
+		supportChannelOverrides := getSupportChannelOverrides(b, *e.GuildID())
 		data := e.SlashCommandInteractionData()
 		channels, err := b.Client.Rest().GetGuildChannels(*e.GuildID())
 		if err != nil {
@@ -79,12 +111,28 @@ func CreateTicketHandler(b *tickets.Bot) handler.CommandHandler {
 			c, channelErr := b.Client.Rest().CreateGuildChannel(
 				*e.GuildID(),
 				discord.GuildTextChannelCreate{
-					Name:  "support-tickets",
-					Topic: "Support tickets & suggestions",
+					Name:                 supportChannelName,
+					Topic:                supportChannelTopic,
+					PermissionOverwrites: supportChannelOverrides,
 				},
 			)
 			if channelErr != nil {
 				return errors.WithMessage(channelErr, "failed to create support-tickets channel")
+			}
+			channelID = c.ID()
+		} else {
+			var targetChannelType = discord.ChannelTypeGuildText
+			c, channelErr := b.Client.Rest().UpdateChannel(
+				channelID,
+				discord.GuildTextChannelUpdate{
+					Name:                 &supportChannelName,
+					Type:                 &targetChannelType,
+					Topic:                &supportChannelTopic,
+					PermissionOverwrites: &supportChannelOverrides,
+				},
+			)
+			if channelErr != nil {
+				return errors.WithMessage(channelErr, "failed to update support-tickets channel")
 			}
 			channelID = c.ID()
 		}

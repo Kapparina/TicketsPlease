@@ -91,78 +91,124 @@ var createTicket = discord.SlashCommandCreate{
 	},
 }
 
+// Support channel constants
+var (
+	supportChannelName  = "support-tickets"
+	supportChannelTopic = "Support tickets & suggestions"
+)
+
+// CreateTicketHandler creates a command handler for the ticket creation command
 func CreateTicketHandler(b *tickets.Bot) handler.CommandHandler {
 	return func(e *handler.CommandEvent) error {
-		supportChannelName := "support-tickets"
-		supportChannelTopic := "Support tickets & suggestions"
-		supportChannelOverrides := getSupportChannelOverrides(b, *e.GuildID())
-		data := e.SlashCommandInteractionData()
-		channels, err := b.Client.Rest().GetGuildChannels(*e.GuildID())
+		channelID, err := getOrCreateSupportChannel(b, e.GuildID())
 		if err != nil {
-			return errors.WithMessage(err, "failed to get guild channels")
+			return err
 		}
-		var channelID snowflake.ID
-		for _, c := range channels {
-			if c.Name() == "support-tickets" {
-				channelID = c.ID()
-			}
-		}
-		if channelID == 0 {
-			c, channelErr := b.Client.Rest().CreateGuildChannel(
-				*e.GuildID(),
-				discord.GuildTextChannelCreate{
-					Name:                 supportChannelName,
-					Topic:                supportChannelTopic,
-					PermissionOverwrites: supportChannelOverrides,
-				},
-			)
-			if channelErr != nil {
-				return errors.WithMessage(channelErr, "failed to create support-tickets channel")
-			}
-			channelID = c.ID()
-		} else {
-			var targetChannelType = discord.ChannelTypeGuildText
-			c, channelErr := b.Client.Rest().UpdateChannel(
-				channelID,
-				discord.GuildTextChannelUpdate{
-					Name:                 &supportChannelName,
-					Type:                 &targetChannelType,
-					Topic:                &supportChannelTopic,
-					PermissionOverwrites: &supportChannelOverrides,
-				},
-			)
-			if channelErr != nil {
-				return errors.WithMessage(channelErr, "failed to update support-tickets channel")
-			}
-			channelID = c.ID()
-		}
-		t, err := b.Client.Rest().CreateThread(
-			channelID,
-			discord.GuildPrivateThreadCreate{
-				Name: fmt.Sprintf(
-					"%s - %s | (%s)",
-					e.User().Username, data.String("subject"), data.String("category"),
-				),
-				AutoArchiveDuration: 60,
-			},
-		)
+		threadID, err := createTicketThread(b, channelID, e)
 		if err != nil {
-			return errors.WithMessage(err, "failed to create thread")
+			return err
 		}
-		if err = b.Client.Rest().AddThreadMember(
-			t.ID(),
-			e.User().ID,
-		); err != nil {
-			return errors.WithMessage(err, "failed to add thread member")
-		}
-		if err = e.CreateMessage(
-			discord.NewMessageCreateBuilder().
-				SetContentf("Created ticket: <#%s>", t.ID()).
-				SetEphemeral(true).
-				Build(),
-		); err != nil {
+		if err = sendTicketCreationConfirmation(e, threadID); err != nil {
 			return errors.WithMessage(err, "failed to send message")
 		}
 		return nil
 	}
+}
+
+// getOrCreateSupportChannel finds or creates the support channel
+func getOrCreateSupportChannel(b *tickets.Bot, guildID *snowflake.ID) (snowflake.ID, error) {
+	channels, err := b.Client.Rest().GetGuildChannels(*guildID)
+	if err != nil {
+		return 0, errors.WithMessage(err, "failed to get guild channels")
+	}
+
+	// Check if support channel already exists
+	for _, c := range channels {
+		if c.Name() == supportChannelName {
+			return updateSupportChannel(b, c.ID(), guildID)
+		}
+	}
+
+	// Create a new support channel
+	return createSupportChannel(b, guildID)
+}
+
+// createSupportChannel creates a new support channel
+func createSupportChannel(b *tickets.Bot, guildID *snowflake.ID) (snowflake.ID, error) {
+	supportChannelOverrides := getSupportChannelOverrides(b, *guildID)
+	c, err := b.Client.Rest().CreateGuildChannel(
+		*guildID,
+		discord.GuildTextChannelCreate{
+			Name:                 supportChannelName,
+			Topic:                supportChannelTopic,
+			PermissionOverwrites: supportChannelOverrides,
+		},
+	)
+	if err != nil {
+		return 0, errors.WithMessage(err, "failed to create support-tickets channel")
+	}
+	return c.ID(), nil
+}
+
+// updateSupportChannel updates an existing support channel
+func updateSupportChannel(b *tickets.Bot, channelID snowflake.ID, guildID *snowflake.ID) (snowflake.ID, error) {
+	supportChannelOverrides := getSupportChannelOverrides(b, *guildID)
+	targetChannelType := discord.ChannelTypeGuildText
+	c, err := b.Client.Rest().UpdateChannel(
+		channelID,
+		discord.GuildTextChannelUpdate{
+			Name:                 &supportChannelName,
+			Type:                 &targetChannelType,
+			Topic:                &supportChannelTopic,
+			PermissionOverwrites: &supportChannelOverrides,
+		},
+	)
+	if err != nil {
+		return 0, errors.WithMessage(err, "failed to update support-tickets channel")
+	}
+	return c.ID(), nil
+}
+
+// createTicketThread creates a private thread for the ticket
+func createTicketThread(b *tickets.Bot, channelID snowflake.ID, e *handler.CommandEvent) (snowflake.ID, error) {
+	data := e.SlashCommandInteractionData()
+	t, err := b.Client.Rest().CreateThread(
+		channelID,
+		discord.GuildPrivateThreadCreate{
+			Name: fmt.Sprintf(
+				"%s - %s | (%s)",
+				e.User().Username, data.String("subject"), data.String("category"),
+			),
+			AutoArchiveDuration: 60,
+		},
+	)
+	if err != nil {
+		return 0, errors.WithMessage(err, "failed to create thread")
+	}
+	if err = b.Client.Rest().AddThreadMember(
+		t.ID(),
+		e.User().ID,
+	); err != nil {
+		return 0, errors.WithMessage(err, "failed to add thread member")
+	}
+
+	return t.ID(), nil
+}
+
+// sendTicketCreationConfirmation sends a confirmation message to the user
+func sendTicketCreationConfirmation(e *handler.CommandEvent, threadID snowflake.ID) error {
+	return e.CreateMessage(
+		discord.NewMessageCreateBuilder().
+			SetContentf("Created ticket: <#%s>", threadID).
+			SetEphemeral(true).
+			Build(),
+	)
+}
+
+func populateTicketContent(b *tickets.Bot, e *handler.CommandEvent) error {
+
+}
+
+func sendTicketContent(b *tickets.Bot, threadID snowflake.ID) error {
+	return nil
 }

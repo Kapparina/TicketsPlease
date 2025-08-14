@@ -1,0 +1,21 @@
+### Ticket:
+
+{{.Subject}}
+
+### Category:
+
+{{.Category}}
+
+### Created by:
+
+{{.Username}}
+
+### Description
+
+{{.Content}}
+
+
+---
+A member of the support team will reply to you as soon as possible.
+
+-# {{ range .Moderators }}<#{{.ID}}> {{end}}

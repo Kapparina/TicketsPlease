@@ -21,6 +21,7 @@ import (
 var (
 	Version = "dev"
 	Commit  = "unknown"
+	GitTag  = "unknown"
 )
 
 func main() {
@@ -35,10 +36,15 @@ func main() {
 	}
 
 	setupLogger(cfg.Log)
-	slog.Info("Starting ticket manager...", slog.String("version", Version), slog.String("commit", Commit))
+	slog.Info(
+		"Starting ticket manager...",
+		slog.String("version", Version),
+		slog.String("git_tag", GitTag),
+		slog.String("commit", Commit),
+	)
 	slog.Info("Command sync status", slog.Bool("sync", *shouldSyncCommands))
 
-	b := ticketMgr.New(*cfg, Version, Commit)
+	b := ticketMgr.New(*cfg, Version, Commit, GitTag)
 
 	h := handler.New()
 	h.Command("/test", commands.TestHandler)

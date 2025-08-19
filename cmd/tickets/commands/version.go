@@ -17,7 +17,7 @@ var version = discord.SlashCommandCreate{
 func VersionHandler(b *tickets.Bot) handler.CommandHandler {
 	return func(e *handler.CommandEvent) error {
 		return e.CreateMessage(discord.MessageCreate{
-			Content: fmt.Sprintf("Version: %s\nCommit: %s", b.Version, b.Commit),
+			Content: fmt.Sprintf("Version: %s\nCommit: %s\nVersion Tag: %s", b.Version, b.Commit, b.GitTag),
 		})
 	}
 }

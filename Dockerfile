@@ -11,6 +11,7 @@ COPY . .
 ARG TARGETOS
 ARG TARGETARCH
 ARG VERSION=dev
+ARG GIT_TAG=unknown
 ARG COMMIT=unknown
 
 RUN --mount=type=cache,target=/root/.cache/go-build \
@@ -18,7 +19,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 \
     GOOS=$TARGETOS \
     GOARCH=$TARGETARCH \
-    go build -ldflags="-X 'main.Version=${VERSION}' -X 'main.Commit=${COMMIT}'" -o bot github.com/kapparina/ticketsplease
+    go build -ldflags="-X 'main.Version=${VERSION}' -X 'main.Commit=${COMMIT}' -X 'main.GitTag=${GIT_TAG}'" -o bot github.com/kapparina/ticketsplease
 
 FROM alpine
 

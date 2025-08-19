@@ -15,12 +15,13 @@ import (
 	"github.com/disgoorg/paginator"
 )
 
-func New(cfg Config, version string, commit string) *Bot {
+func New(cfg Config, version, commit, tag string) *Bot {
 	return &Bot{
 		Cfg:       cfg,
 		Paginator: paginator.New(),
 		Version:   version,
 		Commit:    commit,
+		GitTag:    tag,
 	}
 }
 
@@ -30,6 +31,7 @@ type Bot struct {
 	Paginator *paginator.Manager
 	Version   string
 	Commit    string
+	GitTag    string
 }
 
 func (b *Bot) SetupBot(listeners ...bot.EventListener) error {

@@ -50,7 +50,7 @@ var Categories = map[Category]TicketCategory{
 	},
 	CategoryStaffSupport: {
 		Title:       "staff-support",
-		Description: "Staff support questions",
+		Description: "Mod/Admin support questions",
 	},
 	CategoryAdminSupport: {
 		Title:       "admin-support",
@@ -74,7 +74,7 @@ var Categories = map[Category]TicketCategory{
 	},
 	CategoryStaffSuggestion: {
 		Title:       "staff-suggestion",
-		Description: "Staff suggestion",
+		Description: "Mod/Admin suggestion",
 	},
 	CategoryAdminSuggestion: {
 		Title:       "admin-suggestion",

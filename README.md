@@ -17,7 +17,7 @@ Key technologies: Go, disgo (handler), paginator, TOML configuration, Docker.
   - Creates a private thread per ticket: `<username> - <subject> | (<category>)`
   - Adds the requesting user to the thread
 - Categories (support & suggestions)
-  - Predefined choices, e.g. general-support, mod-support, staff-support, etc.
+  - Predefined baseChoices, e.g. general-support, mod-support, staff-support, etc.
 - Role-based permissions
   - Moderation roles (have ViewAuditLog + ManageMessages) get thread permissions
   - Everyone (guild) role is restricted from sending messages in the parent channel; threads are used for conversations

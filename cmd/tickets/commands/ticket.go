@@ -1,8 +1,10 @@
 package commands
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/handler"
@@ -51,24 +53,14 @@ func getSupportChannelOverrides(b *tickets.Bot, guildID snowflake.ID) []discord.
 	return overrides
 }
 
-var createTicket = discord.SlashCommandCreate{
+var ticket = discord.SlashCommandCreate{
 	Name:        "ticket",
 	Description: "Create a ticket",
 	Options: []discord.ApplicationCommandOption{
 		discord.ApplicationCommandOptionString{
-			Name:        "category",
-			Description: "The category of the ticket",
-			Required:    true,
-			Choices: func() []discord.ApplicationCommandOptionChoiceString {
-				var choices []discord.ApplicationCommandOptionChoiceString
-				for _, category := range tickets.Categories {
-					choices = append(choices, discord.ApplicationCommandOptionChoiceString{
-						Name:  category.Title,
-						Value: category.Description,
-					})
-				}
-				return choices
-			}(),
+			Name:         "category",
+			Description:  "The category of the ticket",
+			Required:     true,
 			Autocomplete: true,
 		},
 		discord.ApplicationCommandOptionString{
@@ -115,6 +107,42 @@ func CreateTicketHandler(b *tickets.Bot) handler.CommandHandler {
 		}
 		return nil
 	}
+}
+
+func TicketAutocompleteHandler(e *handler.AutocompleteEvent) error {
+	var baseChoices []discord.AutocompleteChoice
+	for _, category := range tickets.Categories {
+		baseChoices = append(
+			baseChoices, discord.AutocompleteChoiceString{
+				Name:  category.Title,
+				Value: category.Description,
+			})
+	}
+	data := e.Data
+	input, ok := data.Option("category")
+	if ok {
+		value, err := getInputValue[string](input)
+		if err != nil {
+			return errors.WithMessage(err, "failed to get input value")
+		}
+		slog.Debug("Autocomplete input", slog.Any("input", input), slog.Any("input_value", value))
+		if len(value) > 0 {
+			var choices []discord.AutocompleteChoice
+			for i, c := range baseChoices {
+				if strings.Contains(c.ChoiceName(), value) {
+					choices = append(choices, baseChoices[i])
+				}
+			}
+			return e.AutocompleteResult(choices)
+		}
+	}
+	return e.AutocompleteResult(baseChoices)
+}
+
+func getInputValue[T any](option discord.AutocompleteOption) (T, error) {
+	var value T
+	err := json.Unmarshal(option.Value, &value)
+	return value, err
 }
 
 // getOrCreateSupportChannel finds or creates the support channel

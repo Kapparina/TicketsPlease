@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	MinTicketSubjectLength    = 10
+	MinTicketSubjectLength    = 5
 	MinTicketSubjectLengthPtr = &MinTicketSubjectLength
 	MaxTicketSubjectLength    = 100
 	MaxTicketSubjectLengthPtr = &MaxTicketSubjectLength
@@ -43,7 +43,8 @@ func getSupportChannelOverrides(b *tickets.Bot, guildID snowflake.ID) []discord.
 	overrides = append(overrides, discord.RolePermissionOverwrite{
 		RoleID: guildID,
 		Allow: discord.PermissionSendMessagesInThreads |
-			discord.PermissionViewChannel,
+			discord.PermissionViewChannel |
+			discord.PermissionReadMessageHistory,
 		Deny: discord.PermissionReadMessageHistory |
 			discord.PermissionManageThreads |
 			discord.PermissionCreatePublicThreads |

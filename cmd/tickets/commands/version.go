@@ -1,8 +1,6 @@
 package commands
 
 import (
-	"fmt"
-
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/handler"
 
@@ -16,8 +14,11 @@ var version = discord.SlashCommandCreate{
 
 func VersionHandler(b *tickets.Bot) handler.CommandHandler {
 	return func(e *handler.CommandEvent) error {
-		return e.CreateMessage(discord.MessageCreate{
-			Content: fmt.Sprintf("Version: %s\nCommit: %s\nVersion Tag: %s", b.Version, b.Commit, b.GitTag),
-		})
+		return e.CreateMessage(
+			discord.NewMessageCreateBuilder().
+				SetContentf("Version: %s\nCommit: %s\nVersion Tag: %s", b.Version, b.Commit, b.GitTag).
+				SetEphemeral(true).
+				Build(),
+		)
 	}
 }

@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/handler"
@@ -9,6 +10,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/kapparina/ticketsplease/cmd/tickets"
+	"github.com/kapparina/ticketsplease/cmd/tickets/templates"
 	"github.com/kapparina/ticketsplease/cmd/utils"
 )
 
@@ -121,15 +123,11 @@ func getOrCreateSupportChannel(b *tickets.Bot, guildID *snowflake.ID) (snowflake
 	if err != nil {
 		return 0, errors.WithMessage(err, "failed to get guild channels")
 	}
-
-	// Check if support channel already exists
 	for _, c := range channels {
 		if c.Name() == supportChannelName {
 			return updateSupportChannel(b, c.ID(), guildID)
 		}
 	}
-
-	// Create a new support channel
 	return createSupportChannel(b, guildID)
 }
 
@@ -191,7 +189,9 @@ func createTicketThread(b *tickets.Bot, channelID snowflake.ID, e *handler.Comma
 	); err != nil {
 		return 0, errors.WithMessage(err, "failed to add thread member")
 	}
-
+	if err = sendTicketContent(b, t.ID(), e); err != nil {
+		return 0, errors.WithMessage(err, "failed to send ticket content")
+	}
 	return t.ID(), nil
 }
 
@@ -205,10 +205,50 @@ func sendTicketCreationConfirmation(e *handler.CommandEvent, threadID snowflake.
 	)
 }
 
-func populateTicketContent(b *tickets.Bot, e *handler.CommandEvent) error {
+func populateTicketContent(b *tickets.Bot, e *handler.CommandEvent) (string, error) {
+	data := e.SlashCommandInteractionData()
+	roles, err := b.Client.Rest().GetRoles(*e.GuildID())
+	if err != nil {
+		slog.Error("Failed to get roles", slog.Any("err", err))
+	}
+	filteredRoles := utils.FilterRoles(roles, utils.Moderation)
+	moderatorRoleIDs := make([]string, len(filteredRoles))
+	for i, r := range filteredRoles {
+		moderatorRoleIDs[i] = r.String()
+	}
 
+	// Get attachment URL if present
+	var attachmentURL string
+	if att, ok := data.OptAttachment("attachment"); ok {
+		attachmentURL = att.URL
+	}
+
+	ticketData := templates.TicketData{
+		Category:      data.String("category"),
+		Username:      e.User().Username,
+		Subject:       data.String("subject"),
+		Content:       data.String("content"),
+		Moderators:    moderatorRoleIDs,
+		AttachmentURL: attachmentURL,
+	}
+	return templates.PopulateTicketData(ticketData)
 }
 
-func sendTicketContent(b *tickets.Bot, threadID snowflake.ID) error {
+func sendTicketContent(b *tickets.Bot, threadID snowflake.ID, e *handler.CommandEvent) error {
+	content, err := populateTicketContent(b, e)
+	if err != nil {
+		return errors.WithMessage(err, "failed to populate ticket content")
+	}
+
+	_, err = b.Client.Rest().CreateMessage(
+		threadID,
+		discord.NewMessageCreateBuilder().
+			SetContent(content).
+			Build(),
+	)
+	if err != nil {
+		return errors.WithMessage(err, "failed to create message in thread")
+	}
+
 	return nil
 }

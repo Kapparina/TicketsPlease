@@ -12,10 +12,12 @@ import (
 var TicketTemplate string
 
 type TicketData struct {
-	Category   string
-	Username   string
-	Content    string
-	Moderators []int
+	Category      string
+	Username      string
+	Subject       string
+	Content       string
+	Moderators    []string
+	AttachmentURL string
 }
 
 func PopulateTicketData(data TicketData) (string, error) {

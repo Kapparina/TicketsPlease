@@ -14,8 +14,15 @@
 
 {{.Content}}
 
+{{ if .AttachmentURL }}
+### Attachment:
+
+{{.AttachmentURL}}
+{{ end }}
 
 ---
 A member of the support team will reply to you as soon as possible.
 
--# {{ range .Moderators }}<#{{.ID}}> {{end}}
+{{ if .Moderators }}
+-# {{ range .Moderators }}<@&{{.}}> {{end}}
+{{ end }}

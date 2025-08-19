@@ -5,26 +5,41 @@ type TicketCategory struct {
 	Description string
 }
 
+type Category int
+
+func (c Category) RequiresMod() bool {
+	return c < CategoryStaffSupport
+}
+
+func (c Category) RequiresStaff() bool {
+	return c < CategoryAdminSupport
+}
+
+func (c Category) RequiresAdmin() bool {
+	return c < CategoryOwnerSupport
+}
+
+func (c Category) RequiresOwner() bool {
+	return c >= CategoryAdminSupport
+}
+
 //goland:noinspection GoCommentStart
 const (
-	// Support
-	CategoryGeneralSupport int = iota
-	CategoryModSupport
-	CategoryStaffSupport
-	CategoryAdminSupport
-	CategoryOwnerSupport
+	CategoryGeneralSuggestion Category = iota
+	CategoryGeneralSupport
 	CategoryUserSupport
-
-	// Suggestions
-	CategoryGeneralSuggestion
-	CategoryModSuggestion
-	CategoryStaffSuggestion
-	CategoryAdminSuggestion
-	CategoryOwnerSuggestion
 	CategoryUserSuggestion
+	CategoryModSuggestion
+	CategoryModSupport
+	CategoryStaffSuggestion
+	CategoryStaffSupport
+	CategoryAdminSuggestion
+	CategoryAdminSupport
+	CategoryOwnerSuggestion
+	CategoryOwnerSupport
 )
 
-var Categories = map[int]TicketCategory{
+var Categories = map[Category]TicketCategory{
 	CategoryGeneralSupport: {
 		Title:       "general-support",
 		Description: "General support questions",
@@ -73,4 +88,13 @@ var Categories = map[int]TicketCategory{
 		Title:       "user-suggestion",
 		Description: "User suggestion",
 	},
+}
+
+func FindCategoryByDescription(description string) (Category, bool) {
+	for k, v := range Categories {
+		if v.Description == description {
+			return k, true
+		}
+	}
+	return -1, false
 }

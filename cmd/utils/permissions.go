@@ -24,11 +24,13 @@ var PermissionAssignments = map[PermissionSubset][]discord.Permissions{
 	},
 }
 
-func FilterRoles(roles []discord.Role, targetSubset PermissionSubset) []snowflake.ID {
+func FilterRoles(roles []discord.Role, targetSubset ...PermissionSubset) []snowflake.ID {
 	var filteredRoles []snowflake.ID
 	for _, r := range roles {
-		if r.Permissions.Has(PermissionAssignments[targetSubset]...) {
-			filteredRoles = append(filteredRoles, r.ID)
+		for _, subset := range targetSubset {
+			if r.Permissions.Has(PermissionAssignments[subset]...) {
+				filteredRoles = append(filteredRoles, r.ID)
+			}
 		}
 	}
 	return filteredRoles

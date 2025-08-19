@@ -205,13 +205,30 @@ func sendTicketCreationConfirmation(e *handler.CommandEvent, threadID snowflake.
 	)
 }
 
+//goland:noinspection StructuralWrap
+func determineRoleFilter(category tickets.Category) []utils.PermissionSubset {
+	var subsets []utils.PermissionSubset
+	if category.RequiresMod() {
+		subsets = append(subsets, utils.Moderation)
+	}
+	if category.RequiresAdmin() || category.RequiresStaff() || category.RequiresOwner() { // TODO: add staff & owner subsets
+		subsets = append(subsets, utils.Administration)
+	}
+	if len(subsets) == 0 {
+		subsets = append(subsets, utils.Moderation)
+	}
+	return subsets
+}
+
 func populateTicketContent(b *tickets.Bot, e *handler.CommandEvent) (string, error) {
 	data := e.SlashCommandInteractionData()
 	roles, err := b.Client.Rest().GetRoles(*e.GuildID())
 	if err != nil {
 		slog.Error("Failed to get roles", slog.Any("err", err))
 	}
-	filteredRoles := utils.FilterRoles(roles, utils.Moderation)
+	category, _ := tickets.FindCategoryByDescription(data.String("category"))
+	filterSubsets := determineRoleFilter(category)
+	filteredRoles := utils.FilterRoles(roles, filterSubsets...)
 	moderatorRoleIDs := make([]string, len(filteredRoles))
 	for i, r := range filteredRoles {
 		moderatorRoleIDs[i] = r.String()

@@ -28,13 +28,11 @@ func main() {
 	shouldSyncCommands := flag.Bool("sync-commands", true, "Whether to sync commands to discord")
 	path := flag.String("config", "config.toml", "path to config")
 	flag.Parse()
-
 	cfg, err := cmd.LoadConfig(*path)
 	if err != nil {
 		slog.Error("Failed to read config", slog.Any("err", err))
 		os.Exit(-1)
 	}
-
 	setupLogger(cfg.Log)
 	slog.Info(
 		"Starting ticket manager...",
@@ -43,28 +41,23 @@ func main() {
 		slog.String("commit", Commit),
 	)
 	slog.Info("Command sync status", slog.Bool("sync", *shouldSyncCommands))
-
 	b := cmd.New(*cfg, Version, Commit, GitTag)
-
 	h := handler.New()
-	h.Command("/test", commands.TestHandler)
-	h.Autocomplete("/test", commands.TestAutocompleteHandler)
-	h.Command("/version", commands.VersionHandler(b))
+	h.Command("/test", handlers.TestHandler)
+	h.Autocomplete("/test", handlers.TestAutocompleteHandler)
+	h.Command("/version", handlers.VersionHandler(b))
 	h.Component("/test-button", components.TestComponent)
 	h.Command("/ticket", handlers.CreateTicketHandler(b))
 	h.Autocomplete("/ticket", handlers.TicketAutocompleteHandler)
-
 	if err = b.SetupBot(h, bot.NewListenerFunc(b.OnReady), handlers.MessageHandler(b)); err != nil {
 		slog.Error("Failed to setup bot", slog.Any("err", err))
 		os.Exit(-1)
 	}
-
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		b.Client.Close(ctx)
 	}()
-
 	if *shouldSyncCommands {
 		slog.Info(
 			"Attempting to sync commands...",
@@ -79,14 +72,12 @@ func main() {
 			}
 		}
 	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err = b.Client.OpenGateway(ctx); err != nil {
 		slog.Error("Failed to open gateway", slog.Any("err", err))
 		os.Exit(-1)
 	}
-
 	slog.Info("Bot is running. Press CTRL-C to exit.")
 	s := make(chan os.Signal, 1)
 	signal.Notify(s, syscall.SIGINT, syscall.SIGTERM)

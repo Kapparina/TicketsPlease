@@ -45,7 +45,6 @@ func (b *Bot) SetupBot(listeners ...bot.EventListener) error {
 	if err != nil {
 		return err
 	}
-
 	b.Client = client
 	return nil
 }

@@ -1,15 +1,18 @@
 package commands
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/handler"
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/kapparina/ticketsplease/cmd/tickets"
 	"github.com/kapparina/ticketsplease/cmd/tickets/templates"
@@ -110,6 +113,7 @@ func CreateTicketHandler(b *tickets.Bot) handler.CommandHandler {
 	}
 }
 
+// TicketAutocompleteHandler handles the autocomplete logic for ticket category options based on user input.
 func TicketAutocompleteHandler(e *handler.AutocompleteEvent) error {
 	var baseChoices []discord.AutocompleteChoice
 	for _, category := range tickets.Categories {
@@ -140,6 +144,7 @@ func TicketAutocompleteHandler(e *handler.AutocompleteEvent) error {
 	return e.AutocompleteResult(baseChoices)
 }
 
+// getInputValue deserializes the value of an AutocompleteOption into the specified generic type T and returns it with any error.
 func getInputValue[T any](option discord.AutocompleteOption) (T, error) {
 	var value T
 	err := json.Unmarshal(option.Value, &value)
@@ -194,6 +199,51 @@ func updateSupportChannel(b *tickets.Bot, channelID snowflake.ID, guildID *snowf
 		return 0, errors.WithMessage(err, "failed to update support-tickets channel")
 	}
 	return c.ID(), nil
+}
+
+func postHelpMessage(b *tickets.Bot, c *snowflake.ID, content string) error {
+	_, err := b.Client.Rest().CreateMessage(
+		*c,
+		discord.NewMessageCreateBuilder().
+			SetContent(content).
+			Build(),
+	)
+	if err != nil {
+		return errors.WithMessage(err, "failed to create help message")
+	}
+	return nil
+}
+
+func deleteExistingMessages(b *tickets.Bot, c *snowflake.ID) error {
+	messages, err := getExistingBotMessages(b, c)
+	if err != nil {
+		return err
+	}
+	deleteMessages := func(ctx context.Context, messages []discord.Message) error {
+		eg, ctx := errgroup.WithContext(ctx)
+		eg.SetLimit(10)
+		for _, m := range messages {
+			currentMessage := m
+			eg.TryGo(func() error {
+				return b.Client.Rest().DeleteMessage(*c, currentMessage.ID)
+			})
+		}
+		return eg.Wait()
+	}
+	parentCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if err = deleteMessages(parentCtx, messages); err != nil {
+		return errors.WithMessage(err, "failed to delete existing messages")
+	}
+	return nil
+}
+
+func getExistingBotMessages(b *tickets.Bot, c *snowflake.ID) ([]discord.Message, error) {
+	messages, err := b.Client.Rest().GetMessages(*c, 0, 0, 0, 100)
+	if err != nil {
+		return nil, errors.WithMessage(err, "failed to get existing support channel messages")
+	}
+	return messages, nil
 }
 
 // createTicketThread creates a private thread for the ticket

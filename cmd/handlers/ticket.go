@@ -38,6 +38,8 @@ func CreateTicketHandler(b *cmd.Bot) handler.CommandHandler {
 	}
 }
 
+// getSupportChannelOverrides generates a list of permission overwrites for a support channel in a specific guild.
+// It filters roles based on the Moderation subset and assigns specified permissions to the generated overwrites.
 func getSupportChannelOverrides(b *cmd.Bot, guildID snowflake.ID) []discord.PermissionOverwrite {
 	var overrides discord.PermissionOverwrites
 	roles, roleErr := b.Client.Rest().GetRoles(guildID)
@@ -69,16 +71,15 @@ func getSupportChannelOverrides(b *cmd.Bot, guildID snowflake.ID) []discord.Perm
 
 // getOrCreateSupportChannel finds or creates the support channel
 func getOrCreateSupportChannel(b *cmd.Bot, guildID *snowflake.ID) (snowflake.ID, error) {
-	channels, err := b.Client.Rest().GetGuildChannels(*guildID)
+	c, err := cmd.GetSupportChannel(b, guildID)
 	if err != nil {
-		return 0, errors.WithMessage(err, "failed to get guild channels")
+		return 0, errors.WithMessage(err, "failed to get support channel")
 	}
-	for _, c := range channels {
-		if c.Name() == cmd.SupportChannelName {
-			return updateSupportChannel(b, c.ID(), guildID)
-		}
+	if c != 0 {
+		return updateSupportChannel(b, c, guildID)
+	} else {
+		return createSupportChannel(b, guildID)
 	}
-	return createSupportChannel(b, guildID)
 }
 
 // createSupportChannel creates a new support channel
@@ -117,6 +118,7 @@ func updateSupportChannel(b *cmd.Bot, channelID snowflake.ID, guildID *snowflake
 	return c.ID(), nil
 }
 
+// setupSupportChannel prepares a Discord support channel by clearing existing messages and posting a help message.
 func setupSupportChannel(b *cmd.Bot, c *snowflake.ID, e *handler.CommandEvent) error {
 	if err := deleteExistingMessages(b, c); err != nil {
 		return err
@@ -133,6 +135,7 @@ func setupSupportChannel(b *cmd.Bot, c *snowflake.ID, e *handler.CommandEvent) e
 	return nil
 }
 
+// postHelpMessage sends a message with the given content to a specified Discord channel using the provided bot instance.
 func postHelpMessage(b *cmd.Bot, c *snowflake.ID, content string) error {
 	_, err := b.Client.Rest().CreateMessage(
 		*c,
@@ -146,6 +149,8 @@ func postHelpMessage(b *cmd.Bot, c *snowflake.ID, content string) error {
 	return nil
 }
 
+// deleteExistingMessages removes all existing bot messages from the specified Discord channel.
+// It retrieves messages using the bot client and deletes them in parallel with a concurrency limit.
 func deleteExistingMessages(b *cmd.Bot, c *snowflake.ID) error {
 	messages, err := getExistingBotMessages(b, c)
 	if err != nil {
@@ -170,6 +175,8 @@ func deleteExistingMessages(b *cmd.Bot, c *snowflake.ID) error {
 	return nil
 }
 
+// getExistingBotMessages retrieves up to 100 messages from the specified Discord channel using the provided bot client.
+// Returns a slice of messages or an error if the retrieval fails.
 func getExistingBotMessages(b *cmd.Bot, c *snowflake.ID) ([]discord.Message, error) {
 	messages, err := b.Client.Rest().GetMessages(*c, 0, 0, 0, 100)
 	if err != nil {
@@ -235,6 +242,10 @@ func determineRoleFilter(category cmd.Category) []utils.PermissionSubset {
 	return subsets
 }
 
+// populateTicketContent generates a formatted string for a ticket using user input and guild role data.
+// It fetches custom role filters based on the ticket category and applies them to assemble moderator role IDs.
+// Handles optional attachment URLs and incorporates ticket data into a predefined template.
+// Returns the finalised ticket content string and any error encountered during template population.
 func populateTicketContent(b *cmd.Bot, e *handler.CommandEvent) (string, error) {
 	data := e.SlashCommandInteractionData()
 	roles, err := b.Client.Rest().GetRoles(*e.GuildID())
@@ -266,6 +277,8 @@ func populateTicketContent(b *cmd.Bot, e *handler.CommandEvent) (string, error) 
 	return templates.PopulateTicketData(ticketData)
 }
 
+// sendTicketContent sends the ticket content to the specified thread ID in the provided bot context.
+// It uses populateTicketContent to generate the ticket content and handles errors during content population or message creation.
 func sendTicketContent(b *cmd.Bot, threadID snowflake.ID, e *handler.CommandEvent) error {
 	content, err := populateTicketContent(b, e)
 	if err != nil {

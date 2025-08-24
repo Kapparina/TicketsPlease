@@ -1,11 +1,9 @@
-package commands
+package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/disgoorg/disgo/discord"
@@ -14,21 +12,33 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/kapparina/ticketsplease/cmd/tickets"
-	"github.com/kapparina/ticketsplease/cmd/tickets/templates"
+	"github.com/kapparina/ticketsplease/cmd"
+	"github.com/kapparina/ticketsplease/cmd/templates"
 	"github.com/kapparina/ticketsplease/cmd/utils"
 )
 
-var (
-	MinTicketSubjectLength    = 5
-	MinTicketSubjectLengthPtr = &MinTicketSubjectLength
-	MaxTicketSubjectLength    = 100
-	MaxTicketSubjectLengthPtr = &MaxTicketSubjectLength
-	MaxTicketContentLength    = 1000
-	MaxTicketContentLengthPtr = &MaxTicketContentLength
-)
+// CreateTicketHandler creates a command handler for the ticket creation command
+func CreateTicketHandler(b *cmd.Bot) handler.CommandHandler {
+	return func(e *handler.CommandEvent) error {
+		channelID, err := getOrCreateSupportChannel(b, e.GuildID())
+		if err != nil {
+			return err
+		}
+		if err = setupSupportChannel(b, &channelID, e); err != nil {
+			return err
+		}
+		threadID, err := createTicketThread(b, channelID, e)
+		if err != nil {
+			return err
+		}
+		if err = sendTicketCreationConfirmation(e, threadID); err != nil {
+			return err
+		}
+		return nil
+	}
+}
 
-func getSupportChannelOverrides(b *tickets.Bot, guildID snowflake.ID) []discord.PermissionOverwrite {
+func getSupportChannelOverrides(b *cmd.Bot, guildID snowflake.ID) []discord.PermissionOverwrite {
 	var overrides discord.PermissionOverwrites
 	roles, roleErr := b.Client.Rest().GetRoles(guildID)
 	if roleErr != nil {
@@ -57,108 +67,14 @@ func getSupportChannelOverrides(b *tickets.Bot, guildID snowflake.ID) []discord.
 	return overrides
 }
 
-var ticket = discord.SlashCommandCreate{
-	Name:        "ticket",
-	Description: "Create a ticket",
-	Options: []discord.ApplicationCommandOption{
-		discord.ApplicationCommandOptionString{
-			Name:         "category",
-			Description:  "The category of the ticket",
-			Required:     true,
-			Autocomplete: true,
-		},
-		discord.ApplicationCommandOptionString{
-			Name:        "subject",
-			Description: "A brief description of the ticket",
-			Required:    true,
-			MinLength:   MinTicketSubjectLengthPtr,
-			MaxLength:   MaxTicketSubjectLengthPtr,
-		},
-		discord.ApplicationCommandOptionString{
-			Name:        "content",
-			Description: "Broader specifics of the ticket",
-			Required:    true,
-			MinLength:   MinTicketSubjectLengthPtr,
-			MaxLength:   MaxTicketContentLengthPtr,
-		},
-		discord.ApplicationCommandOptionAttachment{
-			Name:        "attachment",
-			Description: "An optional attachment to send with the ticket",
-			Required:    false,
-		},
-	},
-}
-
-// Support channel constants
-var (
-	supportChannelName  = "support-tickets"
-	supportChannelTopic = "Support tickets & suggestions"
-)
-
-// CreateTicketHandler creates a command handler for the ticket creation command
-func CreateTicketHandler(b *tickets.Bot) handler.CommandHandler {
-	return func(e *handler.CommandEvent) error {
-		channelID, err := getOrCreateSupportChannel(b, e.GuildID())
-		if err != nil {
-			return err
-		}
-		threadID, err := createTicketThread(b, channelID, e)
-		if err != nil {
-			return err
-		}
-		if err = sendTicketCreationConfirmation(e, threadID); err != nil {
-			return errors.WithMessage(err, "failed to send message")
-		}
-		return nil
-	}
-}
-
-// TicketAutocompleteHandler handles the autocomplete logic for ticket category options based on user input.
-func TicketAutocompleteHandler(e *handler.AutocompleteEvent) error {
-	var baseChoices []discord.AutocompleteChoice
-	for _, category := range tickets.Categories {
-		baseChoices = append(
-			baseChoices, discord.AutocompleteChoiceString{
-				Name:  category.Title,
-				Value: category.Description,
-			})
-	}
-	data := e.Data
-	input, ok := data.Option("category")
-	if ok {
-		value, err := getInputValue[string](input)
-		if err != nil {
-			return errors.WithMessage(err, "failed to get input value")
-		}
-		slog.Debug("Autocomplete input", slog.Any("input", input), slog.Any("input_value", value))
-		if len(value) > 0 {
-			var choices []discord.AutocompleteChoice
-			for i, c := range baseChoices {
-				if strings.Contains(c.ChoiceName(), value) {
-					choices = append(choices, baseChoices[i])
-				}
-			}
-			return e.AutocompleteResult(choices)
-		}
-	}
-	return e.AutocompleteResult(baseChoices)
-}
-
-// getInputValue deserializes the value of an AutocompleteOption into the specified generic type T and returns it with any error.
-func getInputValue[T any](option discord.AutocompleteOption) (T, error) {
-	var value T
-	err := json.Unmarshal(option.Value, &value)
-	return value, err
-}
-
 // getOrCreateSupportChannel finds or creates the support channel
-func getOrCreateSupportChannel(b *tickets.Bot, guildID *snowflake.ID) (snowflake.ID, error) {
+func getOrCreateSupportChannel(b *cmd.Bot, guildID *snowflake.ID) (snowflake.ID, error) {
 	channels, err := b.Client.Rest().GetGuildChannels(*guildID)
 	if err != nil {
 		return 0, errors.WithMessage(err, "failed to get guild channels")
 	}
 	for _, c := range channels {
-		if c.Name() == supportChannelName {
+		if c.Name() == cmd.SupportChannelName {
 			return updateSupportChannel(b, c.ID(), guildID)
 		}
 	}
@@ -166,13 +82,13 @@ func getOrCreateSupportChannel(b *tickets.Bot, guildID *snowflake.ID) (snowflake
 }
 
 // createSupportChannel creates a new support channel
-func createSupportChannel(b *tickets.Bot, guildID *snowflake.ID) (snowflake.ID, error) {
+func createSupportChannel(b *cmd.Bot, guildID *snowflake.ID) (snowflake.ID, error) {
 	supportChannelOverrides := getSupportChannelOverrides(b, *guildID)
 	c, err := b.Client.Rest().CreateGuildChannel(
 		*guildID,
 		discord.GuildTextChannelCreate{
-			Name:                 supportChannelName,
-			Topic:                supportChannelTopic,
+			Name:                 cmd.SupportChannelName,
+			Topic:                cmd.SupportChannelTopic,
 			PermissionOverwrites: supportChannelOverrides,
 		},
 	)
@@ -183,15 +99,15 @@ func createSupportChannel(b *tickets.Bot, guildID *snowflake.ID) (snowflake.ID, 
 }
 
 // updateSupportChannel updates an existing support channel
-func updateSupportChannel(b *tickets.Bot, channelID snowflake.ID, guildID *snowflake.ID) (snowflake.ID, error) {
+func updateSupportChannel(b *cmd.Bot, channelID snowflake.ID, guildID *snowflake.ID) (snowflake.ID, error) {
 	supportChannelOverrides := getSupportChannelOverrides(b, *guildID)
 	targetChannelType := discord.ChannelTypeGuildText
 	c, err := b.Client.Rest().UpdateChannel(
 		channelID,
 		discord.GuildTextChannelUpdate{
-			Name:                 &supportChannelName,
+			Name:                 &cmd.SupportChannelName,
 			Type:                 &targetChannelType,
-			Topic:                &supportChannelTopic,
+			Topic:                &cmd.SupportChannelTopic,
 			PermissionOverwrites: &supportChannelOverrides,
 		},
 	)
@@ -201,7 +117,23 @@ func updateSupportChannel(b *tickets.Bot, channelID snowflake.ID, guildID *snowf
 	return c.ID(), nil
 }
 
-func postHelpMessage(b *tickets.Bot, c *snowflake.ID, content string) error {
+func setupSupportChannel(b *cmd.Bot, c *snowflake.ID, e *handler.CommandEvent) error {
+	if err := deleteExistingMessages(b, c); err != nil {
+		return err
+	}
+	commandName := e.SlashCommandInteractionData().CommandName()
+	helpData := templates.HelpData{CommandName: commandName}
+	content, err := templates.PopulateHelpData(helpData)
+	if err != nil {
+		return err
+	}
+	if err = postHelpMessage(b, c, content); err != nil {
+		return err
+	}
+	return nil
+}
+
+func postHelpMessage(b *cmd.Bot, c *snowflake.ID, content string) error {
 	_, err := b.Client.Rest().CreateMessage(
 		*c,
 		discord.NewMessageCreateBuilder().
@@ -214,7 +146,7 @@ func postHelpMessage(b *tickets.Bot, c *snowflake.ID, content string) error {
 	return nil
 }
 
-func deleteExistingMessages(b *tickets.Bot, c *snowflake.ID) error {
+func deleteExistingMessages(b *cmd.Bot, c *snowflake.ID) error {
 	messages, err := getExistingBotMessages(b, c)
 	if err != nil {
 		return err
@@ -238,7 +170,7 @@ func deleteExistingMessages(b *tickets.Bot, c *snowflake.ID) error {
 	return nil
 }
 
-func getExistingBotMessages(b *tickets.Bot, c *snowflake.ID) ([]discord.Message, error) {
+func getExistingBotMessages(b *cmd.Bot, c *snowflake.ID) ([]discord.Message, error) {
 	messages, err := b.Client.Rest().GetMessages(*c, 0, 0, 0, 100)
 	if err != nil {
 		return nil, errors.WithMessage(err, "failed to get existing support channel messages")
@@ -247,7 +179,7 @@ func getExistingBotMessages(b *tickets.Bot, c *snowflake.ID) ([]discord.Message,
 }
 
 // createTicketThread creates a private thread for the ticket
-func createTicketThread(b *tickets.Bot, channelID snowflake.ID, e *handler.CommandEvent) (snowflake.ID, error) {
+func createTicketThread(b *cmd.Bot, channelID snowflake.ID, e *handler.CommandEvent) (snowflake.ID, error) {
 	data := e.SlashCommandInteractionData()
 	t, err := b.Client.Rest().CreateThread(
 		channelID,
@@ -276,16 +208,20 @@ func createTicketThread(b *tickets.Bot, channelID snowflake.ID, e *handler.Comma
 
 // sendTicketCreationConfirmation sends a confirmation message to the user
 func sendTicketCreationConfirmation(e *handler.CommandEvent, threadID snowflake.ID) error {
-	return e.CreateMessage(
+	err := e.CreateMessage(
 		discord.NewMessageCreateBuilder().
 			SetContentf("Created ticket: <#%s>", threadID).
 			SetEphemeral(true).
 			Build(),
 	)
+	if err != nil {
+		return errors.WithMessage(err, "failed to send confirmation message")
+	}
+	return nil
 }
 
 //goland:noinspection StructuralWrap
-func determineRoleFilter(category tickets.Category) []utils.PermissionSubset {
+func determineRoleFilter(category cmd.Category) []utils.PermissionSubset {
 	var subsets []utils.PermissionSubset
 	if category.RequiresMod() {
 		subsets = append(subsets, utils.Moderation)
@@ -299,13 +235,13 @@ func determineRoleFilter(category tickets.Category) []utils.PermissionSubset {
 	return subsets
 }
 
-func populateTicketContent(b *tickets.Bot, e *handler.CommandEvent) (string, error) {
+func populateTicketContent(b *cmd.Bot, e *handler.CommandEvent) (string, error) {
 	data := e.SlashCommandInteractionData()
 	roles, err := b.Client.Rest().GetRoles(*e.GuildID())
 	if err != nil {
 		slog.Error("Failed to get roles", slog.Any("err", err))
 	}
-	category, _ := tickets.FindCategoryByDescription(data.String("category"))
+	category, _ := cmd.FindCategoryByDescription(data.String("category"))
 	filterSubsets := determineRoleFilter(category)
 	filteredRoles := utils.FilterRoles(roles, filterSubsets...)
 	moderatorRoleIDs := make([]string, len(filteredRoles))
@@ -330,7 +266,7 @@ func populateTicketContent(b *tickets.Bot, e *handler.CommandEvent) (string, err
 	return templates.PopulateTicketData(ticketData)
 }
 
-func sendTicketContent(b *tickets.Bot, threadID snowflake.ID, e *handler.CommandEvent) error {
+func sendTicketContent(b *cmd.Bot, threadID snowflake.ID, e *handler.CommandEvent) error {
 	content, err := populateTicketContent(b, e)
 	if err != nil {
 		return errors.WithMessage(err, "failed to populate ticket content")

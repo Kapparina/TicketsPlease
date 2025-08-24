@@ -12,10 +12,10 @@ import (
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/handler"
 
-	ticketMgr "github.com/kapparina/ticketsplease/cmd/tickets"
-	"github.com/kapparina/ticketsplease/cmd/tickets/commands"
-	"github.com/kapparina/ticketsplease/cmd/tickets/components"
-	"github.com/kapparina/ticketsplease/cmd/tickets/handlers"
+	"github.com/kapparina/ticketsplease/cmd"
+	"github.com/kapparina/ticketsplease/cmd/commands"
+	"github.com/kapparina/ticketsplease/cmd/components"
+	"github.com/kapparina/ticketsplease/cmd/handlers"
 )
 
 var (
@@ -29,7 +29,7 @@ func main() {
 	path := flag.String("config", "config.toml", "path to config")
 	flag.Parse()
 
-	cfg, err := ticketMgr.LoadConfig(*path)
+	cfg, err := cmd.LoadConfig(*path)
 	if err != nil {
 		slog.Error("Failed to read config", slog.Any("err", err))
 		os.Exit(-1)
@@ -44,15 +44,15 @@ func main() {
 	)
 	slog.Info("Command sync status", slog.Bool("sync", *shouldSyncCommands))
 
-	b := ticketMgr.New(*cfg, Version, Commit, GitTag)
+	b := cmd.New(*cfg, Version, Commit, GitTag)
 
 	h := handler.New()
 	h.Command("/test", commands.TestHandler)
 	h.Autocomplete("/test", commands.TestAutocompleteHandler)
 	h.Command("/version", commands.VersionHandler(b))
 	h.Component("/test-button", components.TestComponent)
-	h.Command("/ticket", commands.CreateTicketHandler(b))
-	h.Autocomplete("/ticket", commands.TicketAutocompleteHandler)
+	h.Command("/ticket", handlers.CreateTicketHandler(b))
+	h.Autocomplete("/ticket", handlers.TicketAutocompleteHandler)
 
 	if err = b.SetupBot(h, bot.NewListenerFunc(b.OnReady), handlers.MessageHandler(b)); err != nil {
 		slog.Error("Failed to setup bot", slog.Any("err", err))
@@ -94,7 +94,7 @@ func main() {
 	slog.Info("Shutting down bot...")
 }
 
-func setupLogger(cfg ticketMgr.LogConfig) {
+func setupLogger(cfg cmd.LogConfig) {
 	opts := &slog.HandlerOptions{
 		AddSource: cfg.AddSource,
 		Level:     cfg.Level,

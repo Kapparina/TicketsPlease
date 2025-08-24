@@ -42,14 +42,15 @@ func main() {
 	)
 	slog.Info("Command sync status", slog.Bool("sync", *shouldSyncCommands))
 	b := cmd.New(*cfg, Version, Commit, GitTag)
-	h := handler.New()
-	h.Command("/test", handlers.TestHandler)
-	h.Autocomplete("/test", handlers.TestAutocompleteHandler)
-	h.Command("/version", handlers.VersionHandler(b))
-	h.Component("/test-button", components.TestComponent)
-	h.Command("/ticket", handlers.CreateTicketHandler(b))
-	h.Autocomplete("/ticket", handlers.TicketAutocompleteHandler)
-	if err = b.SetupBot(h, bot.NewListenerFunc(b.OnReady), handlers.MessageHandler(b)); err != nil {
+	m := handler.New()
+	m.Command("/test", handlers.TestHandler)
+	m.Autocomplete("/test", handlers.TestAutocompleteHandler)
+	m.Command("/version", handlers.VersionHandler(b))
+	m.Component("/test-button", components.TestComponent)
+	m.Command("/ticket", handlers.CreateTicketHandler(b))
+	m.Autocomplete("/ticket", handlers.TicketAutocompleteHandler)
+	m.Command("/help", handlers.HelpHandler(b))
+	if err = b.SetupBot(m, bot.NewListenerFunc(b.OnReady), handlers.MessageHandler(b)); err != nil {
 		slog.Error("Failed to setup bot", slog.Any("err", err))
 		os.Exit(-1)
 	}

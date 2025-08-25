@@ -18,5 +18,6 @@ Asking for help and submitting suggestions both follow the same simple workflow:
 4. Wait for a response
 
 -# TicketsPlease Version: {{.Version}}
--# If this message has seemingly been reposted, it's because either the bot has been restarted or the version has
-changed.
+-# If this message has seemingly been reposted, it's because either:
+-# 1. The bot has been restarted
+-# 2. The version has changed

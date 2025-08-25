@@ -29,7 +29,6 @@ type TicketData struct {
 type HelpData struct {
 	CommandName string
 	Version     string
-	Ephemeral   bool
 }
 
 func PopulateTicketData(data TicketData) (string, error) {
@@ -43,12 +42,16 @@ func PopulateTicketData(data TicketData) (string, error) {
 
 func PopulateHelpData(data HelpData) (string, error) {
 	var buf bytes.Buffer
-	var t *template.Template
-	if data.Ephemeral {
-		t = template.Must(template.New("help-ephemeral").Parse(HelpEphemeralTemplate))
-	} else {
-		t = template.Must(template.New("help").Parse(HelpTemplate))
+	t := template.Must(template.New("help").Parse(HelpTemplate))
+	if err := t.Execute(&buf, data); err != nil {
+		return "", errors.WithMessage(err, "failed to execute help template")
 	}
+	return buf.String(), nil
+}
+
+func PopulateEphemeralHelpData(data HelpData) (string, error) {
+	var buf bytes.Buffer
+	t := template.Must(template.New("help-ephemeral").Parse(HelpEphemeralTemplate))
 	if err := t.Execute(&buf, data); err != nil {
 		return "", errors.WithMessage(err, "failed to execute help template")
 	}

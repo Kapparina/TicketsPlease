@@ -18,6 +18,9 @@ import (
 func CreateTicketHandler(b *cmd.Bot) handler.CommandHandler {
 	return func(e *handler.CommandEvent) error {
 		channelID, err := cmd.GetSupportChannel(b, e.GuildID())
+		if err != nil {
+			return err
+		}
 		threadID, err := createTicketThread(b, channelID, e)
 		if err != nil {
 			return err

@@ -14,6 +14,9 @@ var TicketTemplate string
 //go:embed help.gomd
 var HelpTemplate string
 
+//go:embed help-ephemeral.gomd
+var HelpEphemeralTemplate string
+
 type TicketData struct {
 	Category      string
 	Username      string
@@ -40,6 +43,15 @@ func PopulateTicketData(data TicketData) (string, error) {
 func PopulateHelpData(data HelpData) (string, error) {
 	var buf bytes.Buffer
 	t := template.Must(template.New("help").Parse(HelpTemplate))
+	if err := t.Execute(&buf, data); err != nil {
+		return "", errors.WithMessage(err, "failed to execute help template")
+	}
+	return buf.String(), nil
+}
+
+func PopulateEphemeralHelpData(data HelpData) (string, error) {
+	var buf bytes.Buffer
+	t := template.Must(template.New("help-ephemeral").Parse(HelpEphemeralTemplate))
 	if err := t.Execute(&buf, data); err != nil {
 		return "", errors.WithMessage(err, "failed to execute help template")
 	}

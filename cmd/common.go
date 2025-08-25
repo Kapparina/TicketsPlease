@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/disgoorg/disgo/discord"
+	"github.com/disgoorg/disgo/handler"
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
@@ -38,7 +39,7 @@ func GetSupportChannel(b *Bot, guildID *snowflake.ID) (snowflake.ID, error) {
 
 func ConfigureSupportChannel(ctx context.Context, b *Bot, guilds ...snowflake.ID) error {
 	configFunc := func(ctx context.Context, guilds []snowflake.ID) error {
-		eg, ctx := errgroup.WithContext(ctx)
+		eg, _ := errgroup.WithContext(ctx)
 		eg.SetLimit(10)
 		for _, g := range guilds {
 			slog.Info("Setting up support channel for guild", slog.Any("guild_id", g))
@@ -165,11 +166,7 @@ func setupSupportChannel(b *Bot, c *snowflake.ID, cmdName string) error {
 		return err
 	}
 	helpData := templates.HelpData{CommandName: cmdName, Version: b.GitTag}
-	content, err := templates.PopulateHelpData(helpData)
-	if err != nil {
-		return err
-	}
-	if err = PostHelpMessage(b, c, content); err != nil {
+	if err := PostHelpMessage(b, c, helpData, nil); err != nil {
 		return err
 	}
 	return nil
@@ -177,13 +174,32 @@ func setupSupportChannel(b *Bot, c *snowflake.ID, cmdName string) error {
 
 // PostHelpMessage sends a message with the given content to a specified Discord channel
 // using the provided bot instance.
-func PostHelpMessage(b *Bot, c *snowflake.ID, content string) error {
-	_, err := b.Client.Rest().CreateMessage(
-		*c,
-		discord.NewMessageCreateBuilder().
-			SetContent(content).
-			Build(),
-	)
+func PostHelpMessage(b *Bot, c *snowflake.ID, data templates.HelpData, e *handler.CommandEvent) error {
+	var content string
+	var err error
+	if e != nil {
+		content, err = templates.PopulateEphemeralHelpData(data)
+	} else {
+		content, err = templates.PopulateHelpData(data)
+	}
+	if err != nil {
+		return err
+	}
+	if e != nil {
+		err = e.CreateMessage(
+			discord.NewMessageCreateBuilder().
+				SetContent(content).
+				SetEphemeral(true).
+				Build(),
+		)
+	} else {
+		_, err = b.Client.Rest().CreateMessage(
+			*c,
+			discord.NewMessageCreateBuilder().
+				SetContent(content).
+				Build(),
+		)
+	}
 	if err != nil {
 		return errors.WithMessage(err, "failed to create help message")
 	}
@@ -198,7 +214,7 @@ func deleteExistingMessages(b *Bot, c *snowflake.ID) error {
 		return err
 	}
 	deleteMessages := func(ctx context.Context, messages []discord.Message) error {
-		eg, ctx := errgroup.WithContext(ctx)
+		eg, _ := errgroup.WithContext(ctx)
 		eg.SetLimit(10)
 		for _, m := range messages {
 			currentMessage := m

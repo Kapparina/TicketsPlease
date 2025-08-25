@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"time"
@@ -14,6 +15,8 @@ import (
 	"github.com/disgoorg/disgo/gateway"
 	"github.com/disgoorg/paginator"
 	"github.com/disgoorg/snowflake/v2"
+
+	"github.com/kapparina/ticketsplease/cmd/commands"
 )
 
 func New(cfg Config, version, commit, tag string) *Bot {
@@ -54,7 +57,11 @@ func (b *Bot) OnReady(e *events.Ready) {
 	slog.Info("Setting presence...")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := b.Client.SetPresence(ctx, gateway.WithListeningActivity("you"), gateway.WithOnlineStatus(discord.OnlineStatusOnline)); err != nil {
+	if err := b.Client.SetPresence(
+		ctx,
+		gateway.WithCustomActivity(fmt.Sprintf("/%s for support", commands.Help.CommandName())),
+		gateway.WithOnlineStatus(discord.OnlineStatusDND),
+	); err != nil {
 		slog.Error("Failed to set presence", slog.Any("err", err))
 	}
 	slog.Info("Setting up support channel...")
@@ -66,7 +73,6 @@ func (b *Bot) OnReady(e *events.Ready) {
 		slog.Error("Failed to configure support channel", slog.Any("err", err))
 	}
 	slog.Info("Bot ready!")
-
 }
 
 func (b *Bot) OnJoin(e *events.GuildJoin) {

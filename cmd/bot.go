@@ -66,7 +66,6 @@ func (b *Bot) OnReady(e *events.Ready) {
 		slog.Error("Failed to configure support channel", slog.Any("err", err))
 	}
 	slog.Info("Bot ready!")
-
 }
 
 func (b *Bot) OnJoin(e *events.GuildJoin) {

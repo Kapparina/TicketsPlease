@@ -35,13 +35,30 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Get commit hash
+        id: commit
+        run: echo "hash=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Get git tag
+        id: git_tag
+        run: |
+          if git describe --tags --exact-match HEAD 2>/dev/null; then
+            GIT_TAG=$(git describe --tags --exact-match HEAD)
+          else
+            GIT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "no-tag")
+          fi
+          echo "tag=$GIT_TAG" >> $GITHUB_OUTPUT
+
       - name: Build and push
         uses: docker/build-push-action@v3
         with:
           context: .
           platforms: linux/amd64,linux/arm/v7,linux/arm64/v8
           push: true
-          build-args: VERSION=${{ steps.meta.outputs.version }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            COMMIT=${{ steps.commit.outputs.hash }}
+            GIT_TAG=${{ steps.git_tag.outputs.tag }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

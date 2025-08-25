@@ -5,7 +5,7 @@ import (
 )
 
 var (
-	MinTicketSubjectLength    = 5
+	MinTicketSubjectLength    = 3
 	MinTicketSubjectLengthPtr = &MinTicketSubjectLength
 	MaxTicketSubjectLength    = 100
 	MaxTicketSubjectLengthPtr = &MaxTicketSubjectLength

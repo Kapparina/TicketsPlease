@@ -163,4 +163,6 @@ locally built image if preferred.
 
 ## 📄 License
 
+Copyright 2025 Kapparina
+
 This project is licensed under the [Apache Licence 2.0](https://www.apache.org/licenses/LICENSE-2.0). See the [LICENCE](./LICENSE) file for details.

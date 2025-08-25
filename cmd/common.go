@@ -56,7 +56,8 @@ func ConfigureSupportChannel(ctx context.Context, b *Bot, guilds ...snowflake.ID
 				if err = setupSupportChannel(b, &c, commands.Ticket.CommandName()); err != nil {
 					return err
 				}
-				return err
+				slog.Info("Support channel setup successful", slog.Any("guild_id", currentGuild))
+				return nil
 			})
 		}
 		return eg.Wait()
@@ -162,12 +163,48 @@ func updateSupportChannel(b *Bot, channelID snowflake.ID, guildID *snowflake.ID)
 
 // setupSupportChannel prepares a Discord support channel by clearing existing messages and posting a help message.
 func setupSupportChannel(b *Bot, c *snowflake.ID, cmdName string) error {
-	if err := deleteExistingMessages(b, c); err != nil {
+	baseContent, err := templates.PopulateHelpData(templates.HelpData{CommandName: cmdName, Version: b.GitTag})
+	if err != nil {
+		return errors.WithMessage(err, "failed to populate base help message")
+	}
+	messages, err := getExistingBotMessages(b, c)
+	if err != nil {
 		return err
 	}
-	helpData := templates.HelpData{CommandName: cmdName, Version: b.GitTag}
-	if err := PostHelpMessage(b, c, helpData, nil); err != nil {
-		return err
+	l := len(messages)
+	lastMessage := messages[l-1]
+	botUser, err := b.Client.Rest().GetCurrentUser("")
+	if err != nil {
+		return errors.WithMessage(err, "failed to get current user")
+	}
+	botUserId := botUser.ID
+	if messages[l-1].Content == baseContent {
+		slog.Info("Support channel is already configured")
+		return nil
+	} else if l >= 1 && lastMessage.Author.ID == botUserId {
+		slog.Info("Last message is from the bot, attempting to update...")
+		if _, err = b.Client.Rest().UpdateMessage(*c, lastMessage.ID, discord.NewMessageUpdateBuilder().
+			SetContent(baseContent).
+			Build(),
+		); err != nil {
+			slog.Error("Failed to update last message", slog.Any("err", err))
+			slog.Info("Attempting to overwrite existing messages...")
+			if err = deleteExistingMessages(b, c, messages); err != nil {
+				return err
+			}
+		} else {
+			return nil
+		}
+		slog.Info("Deletion successful, attempting to send new message...")
+		_, err = b.Client.Rest().CreateMessage(
+			*c,
+			discord.NewMessageCreateBuilder().
+				SetContent(baseContent).
+				Build(),
+		)
+		if err != nil {
+			return errors.WithMessage(err, "failed to send help message")
+		}
 	}
 	return nil
 }
@@ -208,11 +245,7 @@ func PostHelpMessage(b *Bot, c *snowflake.ID, data templates.HelpData, e *handle
 
 // deleteExistingMessages removes all existing bot messages from the specified Discord channel.
 // It retrieves messages using the bot client and deletes them in parallel with a concurrency limit.
-func deleteExistingMessages(b *Bot, c *snowflake.ID) error {
-	messages, err := getExistingBotMessages(b, c)
-	if err != nil {
-		return err
-	}
+func deleteExistingMessages(b *Bot, c *snowflake.ID, messages []discord.Message) error {
 	deleteMessages := func(ctx context.Context, messages []discord.Message) error {
 		eg, _ := errgroup.WithContext(ctx)
 		eg.SetLimit(10)
@@ -226,7 +259,7 @@ func deleteExistingMessages(b *Bot, c *snowflake.ID) error {
 	}
 	parentCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	if err = deleteMessages(parentCtx, messages); err != nil {
+	if err := deleteMessages(parentCtx, messages); err != nil {
 		return errors.WithMessage(err, "failed to delete existing messages")
 	}
 	return nil

@@ -30,6 +30,7 @@ type Config struct {
 type BotConfig struct {
 	DevGuilds []snowflake.ID `toml:"dev_guilds"`
 	Token     string         `toml:"token"`
+	Name      string         `toml:"name"`
 }
 
 type LogConfig struct {

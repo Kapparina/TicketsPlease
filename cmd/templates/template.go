@@ -25,6 +25,7 @@ type TicketData struct {
 
 type HelpData struct {
 	CommandName string
+	Version     string
 }
 
 func PopulateTicketData(data TicketData) (string, error) {

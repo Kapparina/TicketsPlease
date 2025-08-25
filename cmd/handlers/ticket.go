@@ -1,16 +1,13 @@
 package handlers
 
 import (
-	"context"
 	"fmt"
 	"log/slog"
-	"time"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/handler"
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/pkg/errors"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/kapparina/ticketsplease/cmd"
 	"github.com/kapparina/ticketsplease/cmd/templates"
@@ -20,13 +17,7 @@ import (
 // CreateTicketHandler creates a command handler for the ticket creation command
 func CreateTicketHandler(b *cmd.Bot) handler.CommandHandler {
 	return func(e *handler.CommandEvent) error {
-		channelID, err := getOrCreateSupportChannel(b, e.GuildID())
-		if err != nil {
-			return err
-		}
-		if err = setupSupportChannel(b, &channelID, e); err != nil {
-			return err
-		}
+		channelID, err := cmd.GetSupportChannel(b, e.GuildID())
 		threadID, err := createTicketThread(b, channelID, e)
 		if err != nil {
 			return err
@@ -36,153 +27,6 @@ func CreateTicketHandler(b *cmd.Bot) handler.CommandHandler {
 		}
 		return nil
 	}
-}
-
-// getSupportChannelOverrides generates a list of permission overwrites for a support channel in a specific guild.
-// It filters roles based on the Moderation subset and assigns specified permissions to the generated overwrites.
-func getSupportChannelOverrides(b *cmd.Bot, guildID snowflake.ID) []discord.PermissionOverwrite {
-	var overrides discord.PermissionOverwrites
-	roles, roleErr := b.Client.Rest().GetRoles(guildID)
-	if roleErr != nil {
-		return nil
-	}
-	filteredRoles := utils.FilterRoles(roles, utils.Moderation)
-	for _, r := range filteredRoles {
-		o := discord.RolePermissionOverwrite{
-			RoleID: r,
-			Allow:  discord.PermissionsAllThread,
-			Deny:   discord.PermissionsNone,
-		}
-		overrides = append(overrides, o)
-	}
-	overrides = append(overrides, discord.RolePermissionOverwrite{
-		RoleID: guildID,
-		Allow: discord.PermissionSendMessagesInThreads |
-			discord.PermissionViewChannel |
-			discord.PermissionReadMessageHistory,
-		Deny: discord.PermissionReadMessageHistory |
-			discord.PermissionManageThreads |
-			discord.PermissionCreatePublicThreads |
-			discord.PermissionCreatePrivateThreads |
-			discord.PermissionSendMessages,
-	})
-	return overrides
-}
-
-// getOrCreateSupportChannel finds or creates the support channel
-func getOrCreateSupportChannel(b *cmd.Bot, guildID *snowflake.ID) (snowflake.ID, error) {
-	c, err := cmd.GetSupportChannel(b, guildID)
-	if err != nil {
-		return 0, errors.WithMessage(err, "failed to get support channel")
-	}
-	if c != 0 {
-		return updateSupportChannel(b, c, guildID)
-	} else {
-		return createSupportChannel(b, guildID)
-	}
-}
-
-// createSupportChannel creates a new support channel
-func createSupportChannel(b *cmd.Bot, guildID *snowflake.ID) (snowflake.ID, error) {
-	supportChannelOverrides := getSupportChannelOverrides(b, *guildID)
-	c, err := b.Client.Rest().CreateGuildChannel(
-		*guildID,
-		discord.GuildTextChannelCreate{
-			Name:                 cmd.SupportChannelName,
-			Topic:                cmd.SupportChannelTopic,
-			PermissionOverwrites: supportChannelOverrides,
-		},
-	)
-	if err != nil {
-		return 0, errors.WithMessage(err, "failed to create support-tickets channel")
-	}
-	return c.ID(), nil
-}
-
-// updateSupportChannel updates an existing support channel
-func updateSupportChannel(b *cmd.Bot, channelID snowflake.ID, guildID *snowflake.ID) (snowflake.ID, error) {
-	supportChannelOverrides := getSupportChannelOverrides(b, *guildID)
-	targetChannelType := discord.ChannelTypeGuildText
-	c, err := b.Client.Rest().UpdateChannel(
-		channelID,
-		discord.GuildTextChannelUpdate{
-			Name:                 &cmd.SupportChannelName,
-			Type:                 &targetChannelType,
-			Topic:                &cmd.SupportChannelTopic,
-			PermissionOverwrites: &supportChannelOverrides,
-		},
-	)
-	if err != nil {
-		return 0, errors.WithMessage(err, "failed to update support-tickets channel")
-	}
-	return c.ID(), nil
-}
-
-// setupSupportChannel prepares a Discord support channel by clearing existing messages and posting a help message.
-func setupSupportChannel(b *cmd.Bot, c *snowflake.ID, e *handler.CommandEvent) error {
-	if err := deleteExistingMessages(b, c); err != nil {
-		return err
-	}
-	commandName := e.SlashCommandInteractionData().CommandName()
-	helpData := templates.HelpData{CommandName: commandName}
-	content, err := templates.PopulateHelpData(helpData)
-	if err != nil {
-		return err
-	}
-	if err = postHelpMessage(b, c, content); err != nil {
-		return err
-	}
-	return nil
-}
-
-// postHelpMessage sends a message with the given content to a specified Discord channel using the provided bot instance.
-func postHelpMessage(b *cmd.Bot, c *snowflake.ID, content string) error {
-	_, err := b.Client.Rest().CreateMessage(
-		*c,
-		discord.NewMessageCreateBuilder().
-			SetContent(content).
-			Build(),
-	)
-	if err != nil {
-		return errors.WithMessage(err, "failed to create help message")
-	}
-	return nil
-}
-
-// deleteExistingMessages removes all existing bot messages from the specified Discord channel.
-// It retrieves messages using the bot client and deletes them in parallel with a concurrency limit.
-func deleteExistingMessages(b *cmd.Bot, c *snowflake.ID) error {
-	messages, err := getExistingBotMessages(b, c)
-	if err != nil {
-		return err
-	}
-	deleteMessages := func(ctx context.Context, messages []discord.Message) error {
-		eg, ctx := errgroup.WithContext(ctx)
-		eg.SetLimit(10)
-		for _, m := range messages {
-			currentMessage := m
-			eg.TryGo(func() error {
-				return b.Client.Rest().DeleteMessage(*c, currentMessage.ID)
-			})
-		}
-		return eg.Wait()
-	}
-	parentCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	if err = deleteMessages(parentCtx, messages); err != nil {
-		return errors.WithMessage(err, "failed to delete existing messages")
-	}
-	return nil
-}
-
-// getExistingBotMessages retrieves up to 100 messages from the specified Discord channel using the provided bot client.
-// Returns a slice of messages or an error if the retrieval fails.
-func getExistingBotMessages(b *cmd.Bot, c *snowflake.ID) ([]discord.Message, error) {
-	messages, err := b.Client.Rest().GetMessages(*c, 0, 0, 0, 100)
-	if err != nil {
-		return nil, errors.WithMessage(err, "failed to get existing support channel messages")
-	}
-	return messages, nil
 }
 
 // createTicketThread creates a private thread for the ticket
@@ -254,7 +98,7 @@ func populateTicketContent(b *cmd.Bot, e *handler.CommandEvent) (string, error) 
 	}
 	category, _ := cmd.FindCategoryByDescription(data.String("category"))
 	filterSubsets := determineRoleFilter(category)
-	filteredRoles := utils.FilterRoles(roles, filterSubsets...)
+	filteredRoles := utils.FilterRolesByPermission(roles, filterSubsets...)
 	moderatorRoleIDs := make([]string, len(filteredRoles))
 	for i, r := range filteredRoles {
 		moderatorRoleIDs[i] = r.String()

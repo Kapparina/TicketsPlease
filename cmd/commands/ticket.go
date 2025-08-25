@@ -13,7 +13,7 @@ var (
 	MaxTicketContentLengthPtr = &MaxTicketContentLength
 )
 
-var ticket = discord.SlashCommandCreate{
+var Ticket = discord.SlashCommandCreate{
 	Name:        "ticket",
 	Description: "Create a ticket",
 	Options: []discord.ApplicationCommandOption{

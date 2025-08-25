@@ -1,7 +1,8 @@
 # What this channel is for
 
-This channel serves as a guide for submitting tickets. Requests for assistnace and suggestions should be submitted as
-below rather than via random messages in a given text channel.
+This channel serves as a guide for submitting tickets.
+Requests for assistance and suggestions should be submitted as below rather than via random messages in a given text
+channel.
 
 # What this channel is not for
 
@@ -15,3 +16,7 @@ Asking for help and submitting suggestions both follow the same simple workflow:
 2. Fill in the blanks
 3. Submit
 4. Wait for a response
+
+-# TicketsPlease Version: {{.Version}}
+-# If this message has seemingly been reposted, it's because either the bot has been restarted or the version has
+changed.

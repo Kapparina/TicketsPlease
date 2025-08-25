@@ -39,7 +39,7 @@ func GetSupportChannel(b *Bot, guildID *snowflake.ID) (snowflake.ID, error) {
 
 func ConfigureSupportChannel(ctx context.Context, b *Bot, guilds ...snowflake.ID) error {
 	configFunc := func(ctx context.Context, guilds []snowflake.ID) error {
-		eg, ctx := errgroup.WithContext(ctx)
+		eg, _ := errgroup.WithContext(ctx)
 		eg.SetLimit(10)
 		for _, g := range guilds {
 			slog.Info("Setting up support channel for guild", slog.Any("guild_id", g))
@@ -214,7 +214,7 @@ func deleteExistingMessages(b *Bot, c *snowflake.ID) error {
 		return err
 	}
 	deleteMessages := func(ctx context.Context, messages []discord.Message) error {
-		eg, ctx := errgroup.WithContext(ctx)
+		eg, _ := errgroup.WithContext(ctx)
 		eg.SetLimit(10)
 		for _, m := range messages {
 			currentMessage := m

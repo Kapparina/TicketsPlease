@@ -6,5 +6,5 @@ var Commands = []discord.ApplicationCommandCreate{
 	test,
 	version,
 	Ticket,
-	help,
+	Help,
 }

@@ -4,7 +4,7 @@ import (
 	"github.com/disgoorg/disgo/discord"
 )
 
-var help = discord.SlashCommandCreate{
+var Help = discord.SlashCommandCreate{
 	Name:        "help",
 	Description: "How to use this app",
 }

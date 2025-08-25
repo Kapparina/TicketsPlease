@@ -10,6 +10,8 @@ This channel is not for anything but this very message and hosting ticket thread
 
 # Support/Suggestions
 
+## Server-Related
+
 Asking for help and submitting suggestions both follow the same simple workflow:
 
 1. Type `/{{.CommandName}}` in any channel permitted
@@ -17,7 +19,14 @@ Asking for help and submitting suggestions both follow the same simple workflow:
 3. Submit
 4. Wait for a response
 
--# TicketsPlease Version: {{.Version}}
+## Bot-Related
+
+If you have any questions or suggestions regarding the bot,
+feel free to create an issue on the [GitHub repository](https://github.com/Kapparina/TicketsPlease).
+
 -# If this message has seemingly been reposted, it's because either:
+
 -# 1. The bot has been restarted
 -# 2. The version has changed
+
+-# TicketsPlease Version: {{.Version}}

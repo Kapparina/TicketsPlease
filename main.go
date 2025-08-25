@@ -12,10 +12,10 @@ import (
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/handler"
 
-	ticketMgr "github.com/kapparina/ticketsplease/cmd/tickets"
-	"github.com/kapparina/ticketsplease/cmd/tickets/commands"
-	"github.com/kapparina/ticketsplease/cmd/tickets/components"
-	"github.com/kapparina/ticketsplease/cmd/tickets/handlers"
+	"github.com/kapparina/ticketsplease/cmd"
+	"github.com/kapparina/ticketsplease/cmd/commands"
+	"github.com/kapparina/ticketsplease/cmd/components"
+	"github.com/kapparina/ticketsplease/cmd/handlers"
 )
 
 var (
@@ -28,13 +28,11 @@ func main() {
 	shouldSyncCommands := flag.Bool("sync-commands", true, "Whether to sync commands to discord")
 	path := flag.String("config", "config.toml", "path to config")
 	flag.Parse()
-
-	cfg, err := ticketMgr.LoadConfig(*path)
+	cfg, err := cmd.LoadConfig(*path)
 	if err != nil {
 		slog.Error("Failed to read config", slog.Any("err", err))
 		os.Exit(-1)
 	}
-
 	setupLogger(cfg.Log)
 	slog.Info(
 		"Starting ticket manager...",
@@ -43,28 +41,24 @@ func main() {
 		slog.String("commit", Commit),
 	)
 	slog.Info("Command sync status", slog.Bool("sync", *shouldSyncCommands))
-
-	b := ticketMgr.New(*cfg, Version, Commit, GitTag)
-
-	h := handler.New()
-	h.Command("/test", commands.TestHandler)
-	h.Autocomplete("/test", commands.TestAutocompleteHandler)
-	h.Command("/version", commands.VersionHandler(b))
-	h.Component("/test-button", components.TestComponent)
-	h.Command("/ticket", commands.CreateTicketHandler(b))
-	h.Autocomplete("/ticket", commands.TicketAutocompleteHandler)
-
-	if err = b.SetupBot(h, bot.NewListenerFunc(b.OnReady), handlers.MessageHandler(b)); err != nil {
+	b := cmd.New(*cfg, Version, Commit, GitTag)
+	m := handler.New()
+	m.Command("/test", handlers.TestHandler)
+	m.Autocomplete("/test", handlers.TestAutocompleteHandler)
+	m.Command("/version", handlers.VersionHandler(b))
+	m.Component("/test-button", components.TestComponent)
+	m.Command("/ticket", handlers.CreateTicketHandler(b))
+	m.Autocomplete("/ticket", handlers.TicketAutocompleteHandler)
+	m.Command("/help", handlers.HelpHandler(b))
+	if err = b.SetupBot(m, bot.NewListenerFunc(b.OnReady), bot.NewListenerFunc(b.OnJoin), handlers.MessageHandler(b)); err != nil {
 		slog.Error("Failed to setup bot", slog.Any("err", err))
 		os.Exit(-1)
 	}
-
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		b.Client.Close(ctx)
 	}()
-
 	if *shouldSyncCommands {
 		slog.Info(
 			"Attempting to sync commands...",
@@ -79,14 +73,12 @@ func main() {
 			}
 		}
 	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err = b.Client.OpenGateway(ctx); err != nil {
 		slog.Error("Failed to open gateway", slog.Any("err", err))
 		os.Exit(-1)
 	}
-
 	slog.Info("Bot is running. Press CTRL-C to exit.")
 	s := make(chan os.Signal, 1)
 	signal.Notify(s, syscall.SIGINT, syscall.SIGTERM)
@@ -94,7 +86,7 @@ func main() {
 	slog.Info("Shutting down bot...")
 }
 
-func setupLogger(cfg ticketMgr.LogConfig) {
+func setupLogger(cfg cmd.LogConfig) {
 	opts := &slog.HandlerOptions{
 		AddSource: cfg.AddSource,
 		Level:     cfg.Level,

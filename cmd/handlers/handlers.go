@@ -4,10 +4,10 @@ import (
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/events"
 
-	"github.com/kapparina/ticketsplease/cmd/tickets"
+	"github.com/kapparina/ticketsplease/cmd"
 )
 
-func MessageHandler(b *tickets.Bot) bot.EventListener {
+func MessageHandler(b *cmd.Bot) bot.EventListener {
 	return bot.NewListenerFunc(func(e *events.MessageCreate) {
 		// TODO: handle message
 	})

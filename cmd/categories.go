@@ -1,4 +1,4 @@
-package tickets
+package cmd
 
 type TicketCategory struct {
 	Title       string

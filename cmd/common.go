@@ -165,11 +165,7 @@ func setupSupportChannel(b *Bot, c *snowflake.ID, cmdName string) error {
 		return err
 	}
 	helpData := templates.HelpData{CommandName: cmdName, Version: b.GitTag}
-	content, err := templates.PopulateHelpData(helpData)
-	if err != nil {
-		return err
-	}
-	if err = PostHelpMessage(b, c, content); err != nil {
+	if err := PostHelpMessage(b, c, helpData); err != nil {
 		return err
 	}
 	return nil
@@ -177,11 +173,16 @@ func setupSupportChannel(b *Bot, c *snowflake.ID, cmdName string) error {
 
 // PostHelpMessage sends a message with the given content to a specified Discord channel
 // using the provided bot instance.
-func PostHelpMessage(b *Bot, c *snowflake.ID, content string) error {
-	_, err := b.Client.Rest().CreateMessage(
+func PostHelpMessage(b *Bot, c *snowflake.ID, data templates.HelpData) error {
+	content, err := templates.PopulateHelpData(data)
+	if err != nil {
+		return err
+	}
+	_, err = b.Client.Rest().CreateMessage(
 		*c,
 		discord.NewMessageCreateBuilder().
 			SetContent(content).
+			SetEphemeral(data.Ephemeral).
 			Build(),
 	)
 	if err != nil {

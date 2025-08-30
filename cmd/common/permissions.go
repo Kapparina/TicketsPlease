@@ -30,7 +30,11 @@ func FilterRolesByPermission(roles []discord.Role, targetSubset ...PermissionSub
 	for _, r := range roles {
 		for _, subset := range targetSubset {
 			if r.Permissions.Has(PermissionAssignments[subset]...) {
-				slog.Debug("Filtered role", slog.Any("role", r.Name))
+				slog.Debug(
+					"Filtered role",
+					slog.Any("role", r.Name),
+					slog.Any("method", "permission"),
+				)
 				filteredRoles = append(filteredRoles, r)
 			}
 		}
@@ -43,6 +47,11 @@ func FilterRolesByNames(roles []discord.Role, targetNames ...string) []discord.R
 	for _, r := range roles {
 		for _, name := range targetNames {
 			if r.Name == name {
+				slog.Debug(
+					"Filtered role",
+					slog.Any("role", r.Name),
+					slog.Any("method", "name"),
+				)
 				filteredRoles = append(filteredRoles, r)
 			}
 		}
@@ -54,6 +63,11 @@ func FilterRolesRemoveManaged(roles []discord.Role) []discord.Role {
 	var filteredRoles []discord.Role
 	for _, r := range roles {
 		if !r.Managed {
+			slog.Debug(
+				"Filtered role",
+				slog.Any("role", r.Name),
+				slog.Any("method", "managed"),
+			)
 			filteredRoles = append(filteredRoles, r)
 		}
 	}

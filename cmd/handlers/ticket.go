@@ -79,14 +79,18 @@ func sendTicketCreationConfirmation(e *handler.CommandEvent, threadID snowflake.
 func determineRoleFilter(category common.Category) []common.PermissionSubset {
 	var subsets []common.PermissionSubset
 	if category.RequiresMod() {
+		slog.Debug("Category requires moderation")
 		subsets = append(subsets, common.Moderation)
 	}
 	if category.RequiresAdmin() || category.RequiresStaff() || category.RequiresOwner() { // TODO: add staff & owner subsets
+		slog.Debug("Category requires administration")
 		subsets = append(subsets, common.Administration)
 	}
 	if len(subsets) == 0 {
+		slog.Debug("No role filter determined, defaulting to moderation")
 		subsets = append(subsets, common.Moderation)
 	}
+	slog.Debug("Determined role filter", slog.Any("subsets", subsets))
 	return subsets
 }
 

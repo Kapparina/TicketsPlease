@@ -79,7 +79,7 @@ func getSupportChannelOverrides(b *Bot, guildID snowflake.ID) []discord.Permissi
 		return nil
 	}
 	filteredRoles := common.FilterRolesByPermission(roles, common.Moderation)
-	slog.Debug("Filtered roles by permission", slog.Any("filtered_roles", filteredRoles))
+	slog.Debug("Filtered roles", slog.Any("filtered_roles", filteredRoles))
 	for _, r := range filteredRoles {
 		o := discord.RolePermissionOverwrite{
 			RoleID: r.ID,
@@ -89,7 +89,7 @@ func getSupportChannelOverrides(b *Bot, guildID snowflake.ID) []discord.Permissi
 		overrides = append(overrides, o)
 	}
 	filteredRoles = common.FilterRolesByNames(roles, b.Cfg.Bot.Name)
-	slog.Debug("Filtered roles by name", slog.Any("filtered_roles", filteredRoles))
+	slog.Debug("Filtered roles", slog.Any("filtered_roles", filteredRoles))
 	for _, r := range filteredRoles {
 		o := discord.RolePermissionOverwrite{
 			RoleID: r.ID,

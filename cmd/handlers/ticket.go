@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"log/slog"
+	"slices"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/handler"
@@ -12,7 +13,6 @@ import (
 	"github.com/kapparina/ticketsplease/cmd"
 	"github.com/kapparina/ticketsplease/cmd/common"
 	"github.com/kapparina/ticketsplease/cmd/templates"
-	"github.com/kapparina/ticketsplease/cmd/utils"
 )
 
 // CreateTicketHandler creates a command handler for the ticket creation command
@@ -76,16 +76,16 @@ func sendTicketCreationConfirmation(e *handler.CommandEvent, threadID snowflake.
 }
 
 //goland:noinspection StructuralWrap
-func determineRoleFilter(category common.Category) []utils.PermissionSubset {
-	var subsets []utils.PermissionSubset
+func determineRoleFilter(category common.Category) []common.PermissionSubset {
+	var subsets []common.PermissionSubset
 	if category.RequiresMod() {
-		subsets = append(subsets, utils.Moderation)
+		subsets = append(subsets, common.Moderation)
 	}
 	if category.RequiresAdmin() || category.RequiresStaff() || category.RequiresOwner() { // TODO: add staff & owner subsets
-		subsets = append(subsets, utils.Administration)
+		subsets = append(subsets, common.Administration)
 	}
 	if len(subsets) == 0 {
-		subsets = append(subsets, utils.Moderation)
+		subsets = append(subsets, common.Moderation)
 	}
 	return subsets
 }
@@ -102,18 +102,18 @@ func populateTicketContent(b *cmd.Bot, e *handler.CommandEvent) (string, error) 
 	}
 	category, _ := common.FindCategoryByDescription(data.String("category"))
 	filterSubsets := determineRoleFilter(category)
-	filteredRoles := utils.FilterRolesByPermission(roles, filterSubsets...)
+	unmanagedRoles := common.FilterRolesRemoveManaged(roles)
+	filteredRoles := common.FilterRolesByPermission(unmanagedRoles, filterSubsets...)
 	moderatorRoleIDs := make([]string, len(filteredRoles))
 	for i, r := range filteredRoles {
-		moderatorRoleIDs[i] = r.String()
+		moderatorRoleIDs[i] = r.ID.String()
 	}
-
-	// Get attachment URL if present
+	slices.Sort(moderatorRoleIDs)
+	moderatorRoleIDs = slices.Compact(moderatorRoleIDs)
 	var attachmentURL string
 	if att, ok := data.OptAttachment("attachment"); ok {
 		attachmentURL = att.URL
 	}
-
 	ticketData := templates.TicketData{
 		Category:      data.String("category"),
 		Username:      e.User().Username,
@@ -132,7 +132,6 @@ func sendTicketContent(b *cmd.Bot, threadID snowflake.ID, e *handler.CommandEven
 	if err != nil {
 		return errors.WithMessage(err, "failed to populate ticket content")
 	}
-
 	_, err = b.Client.Rest().CreateMessage(
 		threadID,
 		discord.NewMessageCreateBuilder().
@@ -142,6 +141,5 @@ func sendTicketContent(b *cmd.Bot, threadID snowflake.ID, e *handler.CommandEven
 	if err != nil {
 		return errors.WithMessage(err, "failed to create message in thread")
 	}
-
 	return nil
 }

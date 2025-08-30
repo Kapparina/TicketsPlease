@@ -1,8 +1,9 @@
-package utils
+package common
 
 import (
+	"log/slog"
+
 	"github.com/disgoorg/disgo/discord"
-	"github.com/disgoorg/snowflake/v2"
 )
 
 type PermissionSubset int
@@ -24,25 +25,36 @@ var PermissionAssignments = map[PermissionSubset][]discord.Permissions{
 	},
 }
 
-func FilterRolesByPermission(roles []discord.Role, targetSubset ...PermissionSubset) []snowflake.ID {
-	var filteredRoles []snowflake.ID
+func FilterRolesByPermission(roles []discord.Role, targetSubset ...PermissionSubset) []discord.Role {
+	var filteredRoles []discord.Role
 	for _, r := range roles {
 		for _, subset := range targetSubset {
 			if r.Permissions.Has(PermissionAssignments[subset]...) {
-				filteredRoles = append(filteredRoles, r.ID)
+				slog.Debug("Filtered role", slog.Any("role", r.Name))
+				filteredRoles = append(filteredRoles, r)
 			}
 		}
 	}
 	return filteredRoles
 }
 
-func FilterRolesByNames(roles []discord.Role, targetNames ...string) []snowflake.ID {
-	var filteredRoles []snowflake.ID
+func FilterRolesByNames(roles []discord.Role, targetNames ...string) []discord.Role {
+	var filteredRoles []discord.Role
 	for _, r := range roles {
 		for _, name := range targetNames {
 			if r.Name == name {
-				filteredRoles = append(filteredRoles, r.ID)
+				filteredRoles = append(filteredRoles, r)
 			}
+		}
+	}
+	return filteredRoles
+}
+
+func FilterRolesRemoveManaged(roles []discord.Role) []discord.Role {
+	var filteredRoles []discord.Role
+	for _, r := range roles {
+		if !r.Managed {
+			filteredRoles = append(filteredRoles, r)
 		}
 	}
 	return filteredRoles

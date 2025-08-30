@@ -12,8 +12,8 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/kapparina/ticketsplease/cmd/commands"
+	"github.com/kapparina/ticketsplease/cmd/common"
 	"github.com/kapparina/ticketsplease/cmd/templates"
-	"github.com/kapparina/ticketsplease/cmd/utils"
 )
 
 // Support channel constants
@@ -78,21 +78,21 @@ func getSupportChannelOverrides(b *Bot, guildID snowflake.ID) []discord.Permissi
 	if roleErr != nil {
 		return nil
 	}
-	filteredRoles := utils.FilterRolesByPermission(roles, utils.Moderation)
-	slog.Debug("Filtered roles", slog.Any("filtered_roles", filteredRoles))
+	filteredRoles := common.FilterRolesByPermission(roles, common.Moderation)
+	slog.Debug("Filtered roles by permission", slog.Any("filtered_roles", filteredRoles))
 	for _, r := range filteredRoles {
 		o := discord.RolePermissionOverwrite{
-			RoleID: r,
+			RoleID: r.ID,
 			Allow:  discord.PermissionsAllThread,
 			Deny:   discord.PermissionsNone,
 		}
 		overrides = append(overrides, o)
 	}
-	filteredRoles = utils.FilterRolesByNames(roles, b.Cfg.Bot.Name)
-	slog.Debug("Filtered roles", slog.Any("filtered_roles", filteredRoles))
+	filteredRoles = common.FilterRolesByNames(roles, b.Cfg.Bot.Name)
+	slog.Debug("Filtered roles by name", slog.Any("filtered_roles", filteredRoles))
 	for _, r := range filteredRoles {
 		o := discord.RolePermissionOverwrite{
-			RoleID: r,
+			RoleID: r.ID,
 			Allow:  discord.PermissionsAllChannel | discord.PermissionsAllThread,
 			Deny:   discord.PermissionsNone,
 		}

@@ -10,6 +10,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/kapparina/ticketsplease/cmd"
+	"github.com/kapparina/ticketsplease/cmd/common"
 	"github.com/kapparina/ticketsplease/cmd/templates"
 	"github.com/kapparina/ticketsplease/cmd/utils"
 )
@@ -75,7 +76,7 @@ func sendTicketCreationConfirmation(e *handler.CommandEvent, threadID snowflake.
 }
 
 //goland:noinspection StructuralWrap
-func determineRoleFilter(category cmd.Category) []utils.PermissionSubset {
+func determineRoleFilter(category common.Category) []utils.PermissionSubset {
 	var subsets []utils.PermissionSubset
 	if category.RequiresMod() {
 		subsets = append(subsets, utils.Moderation)
@@ -99,7 +100,7 @@ func populateTicketContent(b *cmd.Bot, e *handler.CommandEvent) (string, error) 
 	if err != nil {
 		slog.Error("Failed to get roles", slog.Any("err", err))
 	}
-	category, _ := cmd.FindCategoryByDescription(data.String("category"))
+	category, _ := common.FindCategoryByDescription(data.String("category"))
 	filterSubsets := determineRoleFilter(category)
 	filteredRoles := utils.FilterRolesByPermission(roles, filterSubsets...)
 	moderatorRoleIDs := make([]string, len(filteredRoles))

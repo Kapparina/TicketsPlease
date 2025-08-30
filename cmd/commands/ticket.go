@@ -1,7 +1,11 @@
 package commands
 
 import (
+	"log/slog"
+
 	"github.com/disgoorg/disgo/discord"
+
+	"github.com/kapparina/ticketsplease/cmd/common"
 )
 
 var (
@@ -21,7 +25,14 @@ var Ticket = discord.SlashCommandCreate{
 			Name:         "category",
 			Description:  "The category of the ticket",
 			Required:     true,
-			Autocomplete: true,
+			Autocomplete: false,
+			Choices: func() []discord.ApplicationCommandOptionChoiceString {
+				choices, err := common.GetCategoryChoices[discord.ApplicationCommandOptionChoiceString]()
+				if err != nil {
+					slog.Error("Failed to get category choices", slog.Any("err", err))
+				}
+				return choices
+			}(),
 		},
 		discord.ApplicationCommandOptionString{
 			Name:        "subject",

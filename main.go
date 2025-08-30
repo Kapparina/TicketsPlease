@@ -11,6 +11,7 @@ import (
 
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/handler"
+	"github.com/disgoorg/disgo/handler/middleware"
 
 	"github.com/kapparina/ticketsplease/cmd"
 	"github.com/kapparina/ticketsplease/cmd/commands"
@@ -43,12 +44,13 @@ func main() {
 	slog.Info("Command sync status", slog.Bool("sync", *shouldSyncCommands))
 	b := cmd.New(*cfg, Version, Commit, GitTag)
 	m := handler.New()
+	m.Use(middleware.Logger)
 	m.Command("/test", handlers.TestHandler)
 	m.Autocomplete("/test", handlers.TestAutocompleteHandler)
 	m.Command("/version", handlers.VersionHandler(b))
 	m.Component("/test-button", components.TestComponent)
 	m.Command("/ticket", handlers.CreateTicketHandler(b))
-	m.Autocomplete("/ticket", handlers.TicketAutocompleteHandler)
+	// m.Autocomplete("/ticket", handlers.TicketAutocompleteHandler)
 	m.Command("/help", handlers.HelpHandler(b))
 	if err = b.SetupBot(m, bot.NewListenerFunc(b.OnReady), bot.NewListenerFunc(b.OnJoin), handlers.MessageHandler(b)); err != nil {
 		slog.Error("Failed to setup bot", slog.Any("err", err))

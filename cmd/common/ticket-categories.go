@@ -1,4 +1,12 @@
-package cmd
+package common
+
+import (
+	"reflect"
+
+	"github.com/pkg/errors"
+
+	"github.com/kapparina/ticketsplease/cmd/utils"
+)
 
 type TicketCategory struct {
 	Title       string
@@ -97,4 +105,20 @@ func FindCategoryByDescription(description string) (Category, bool) {
 		}
 	}
 	return -1, false
+}
+
+func GetCategoryChoices[T utils.ChoiceOption]() ([]T, error) {
+	typeOfT := reflect.TypeFor[T]()
+	choices := make([]T, 0, len(Categories))
+	valueType, _ := typeOfT.FieldByName("Value")
+	if valueType.Type.Kind() != reflect.String {
+		return nil, errors.New("value type must be string")
+	}
+	for _, info := range Categories {
+		choice := reflect.New(typeOfT).Elem()
+		choice.FieldByName("Name").SetString(info.Title)
+		choice.FieldByName("Value").SetString(info.Description)
+		choices = append(choices, choice.Interface().(T))
+	}
+	return choices, nil
 }

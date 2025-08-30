@@ -2,45 +2,53 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
-	"strings"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/handler"
 	"github.com/pkg/errors"
 
-	"github.com/kapparina/ticketsplease/cmd"
+	"github.com/kapparina/ticketsplease/cmd/common"
+	"github.com/kapparina/ticketsplease/cmd/utils"
 )
 
 // TicketAutocompleteHandler handles the autocomplete logic for ticket category options based on user input.
 func TicketAutocompleteHandler(e *handler.AutocompleteEvent) error {
-	var baseChoices []discord.AutocompleteChoice
-	for _, category := range cmd.Categories {
-		baseChoices = append(
-			baseChoices, discord.AutocompleteChoiceString{
-				Name:  category.Title,
-				Value: category.Description,
-			})
+	var choices []discord.AutocompleteChoice
+	focusedElement := e.Data.Focused().Name
+	slog.Debug("Focused element", slog.Any("focused_element", focusedElement))
+	input, _ := e.Data.Option(focusedElement)
+	value, inputErr := getInputValue[string](input)
+	if inputErr != nil {
+		return errors.WithMessage(inputErr, "failed to get input value")
 	}
-	data := e.Data
-	input, ok := data.Option("category")
-	if ok {
-		value, err := getInputValue[string](input)
-		if err != nil {
-			return errors.WithMessage(err, "failed to get input value")
+	slog.Debug("Autocomplete input", slog.Any("input", input), slog.Any("input_value", value))
+	switch focusedElement {
+	case "category":
+		baseChoices, choiceErr := common.GetCategoryChoices[discord.AutocompleteChoiceString]()
+		if choiceErr != nil {
+			return errors.WithMessage(choiceErr, "failed to get category choices")
 		}
-		slog.Debug("Autocomplete input", slog.Any("input", input), slog.Any("input_value", value))
+		slog.Debug("Autocomplete choices", slog.Any("choices", baseChoices))
+		choicesInterface := make([]discord.AutocompleteChoice, len(baseChoices))
+		for i, choice := range baseChoices {
+			choicesInterface[i] = choice
+		}
 		if len(value) > 0 {
-			var choices []discord.AutocompleteChoice
-			for i, c := range baseChoices {
-				if strings.Contains(c.ChoiceName(), value) {
-					choices = append(choices, baseChoices[i])
-				}
+			filteredChoices := utils.GetFilteredAutocompleteOptions[discord.AutocompleteChoice](value, choicesInterface)
+			if len(filteredChoices) == 0 {
+				return fmt.Errorf("no results found for %s", value)
 			}
-			return e.AutocompleteResult(choices)
+			choices = filteredChoices
+			break
 		}
+		choices = choicesInterface
+		break
+	default:
+		return nil
 	}
-	return e.AutocompleteResult(baseChoices)
+	return e.AutocompleteResult(choices)
 }
 
 // getInputValue deserializes the value of an AutocompleteOption into the specified generic type T and returns it with any error.

@@ -50,7 +50,6 @@ func main() {
 	m.Command("/version", handlers.VersionHandler(b))
 	m.Component("/test-button", components.TestComponent)
 	m.Command("/ticket", handlers.CreateTicketHandler(b))
-	// m.Autocomplete("/ticket", handlers.TicketAutocompleteHandler)
 	m.Command("/help", handlers.HelpHandler(b))
 	if err = b.SetupBot(m, bot.NewListenerFunc(b.OnReady), bot.NewListenerFunc(b.OnJoin), handlers.MessageHandler(b)); err != nil {
 		slog.Error("Failed to setup bot", slog.Any("err", err))

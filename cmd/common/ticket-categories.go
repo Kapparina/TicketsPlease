@@ -4,8 +4,6 @@ import (
 	"reflect"
 
 	"github.com/pkg/errors"
-
-	"github.com/kapparina/ticketsplease/cmd/utils"
 )
 
 type TicketCategory struct {
@@ -24,7 +22,7 @@ func (c Category) RequiresStaff() bool {
 }
 
 func (c Category) RequiresAdmin() bool {
-	return c < CategoryOwnerSupport
+	return c < CategoryOwnerSuggestion
 }
 
 func (c Category) RequiresOwner() bool {
@@ -37,10 +35,10 @@ const (
 	CategoryGeneralSupport
 	CategoryUserSupport
 	CategoryUserSuggestion
-	CategoryModSuggestion
-	CategoryModSupport
 	CategoryStaffSuggestion
 	CategoryStaffSupport
+	CategoryModSuggestion
+	CategoryModSupport
 	CategoryAdminSuggestion
 	CategoryAdminSupport
 	CategoryOwnerSuggestion
@@ -107,7 +105,7 @@ func FindCategoryByDescription(description string) (Category, bool) {
 	return -1, false
 }
 
-func GetCategoryChoices[T utils.ChoiceOption]() ([]T, error) {
+func GetCategoryChoices[T ChoiceOption]() ([]T, error) {
 	typeOfT := reflect.TypeFor[T]()
 	choices := make([]T, 0, len(Categories))
 	valueType, _ := typeOfT.FieldByName("Value")

@@ -2,171 +2,169 @@ name: Deploy Discord Bot
 
 on:
   push:
-    tags:
-      - "*"
-  workflow_dispatch:
+    tags: [ 'v*' ]
+  workflow_dispatch:  # Allows manual triggering
 
 jobs:
-  deploy:
-    name: Build and Deploy
+  guard:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
+    outputs:
+      eligible: ${{ steps.check.outputs.eligible }}
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          fetch-tags: true
-          ref: ${{ github.ref }}
-
-      - name: Determine tag object type and target commit
-        id: taginfo
+      - name: Verify annotated tag on main
+        id: check
         shell: bash
         run: |
-          set -euo pipefail
-          echo "GITHUB_REF=${GITHUB_REF}"
-          echo "GITHUB_REF_NAME=${GITHUB_REF_NAME}"
-          # Use for-each-ref to get object type and peeled commit for the tag ref
-          REF_FULL_NAME="${GITHUB_REF}"
-          if [[ "${REF_FULL_NAME}" != refs/tags/* ]]; then
-            echo "Not a tag ref: ${REF_FULL_NAME}"
-            echo "tag_object_type=unknown" >> $GITHUB_OUTPUT
-            echo "tag_commit_sha=unknown" >> $GITHUB_OUTPUT
+          set -e
+          # Ensure we have all refs
+          git fetch --tags --force
+          git fetch origin main --prune --depth=0
+          TAG_NAME="${GITHUB_REF#refs/tags/}"
+          # Determine if tag is annotated (tag object) vs lightweight (commit)
+          TYPE=$(git cat-file -t "refs/tags/${TAG_NAME}" || echo "missing")
+          if [ "$TYPE" != "tag" ]; then
+            echo "Tag ${TAG_NAME} is not annotated (type=$TYPE). Skipping." >&2
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          LINE=$(git for-each-ref --format='%(objecttype) %(objectname) %(refname) %(taggername) %(taggerdate:iso) %(peeled)' "${REF_FULL_NAME}" || true)
-          if [ -z "${LINE}" ]; then
-            echo "Tag ref not found locally. Ensure tags are fetched."
-            echo "tag_object_type=unknown" >> $GITHUB_OUTPUT
-            echo "tag_commit_sha=unknown" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          OBJ_TYPE=$(echo "${LINE}" | awk '{print $1}')
-          TAG_OBJ=$(echo "${LINE}" | awk '{print $2}')
-          PEELED=$(echo "${LINE}" | awk '{print $6}')
-          if [ "${OBJ_TYPE}" = "tag" ]; then
-            COMMIT_SHA="${PEELED}"
+          # Resolve the tagged commit and verify it is contained in main
+          TAG_COMMIT=$(git rev-parse "refs/tags/${TAG_NAME}^{commit}")
+          if git merge-base --is-ancestor "$TAG_COMMIT" origin/main; then
+            echo "eligible=true" >> "$GITHUB_OUTPUT"
           else
-            # lightweight tag -> object is already a commit
-            COMMIT_SHA="${TAG_OBJ}"
-          fi
-          echo "tag_object_type=${OBJ_TYPE}" >> $GITHUB_OUTPUT
-          echo "tag_commit_sha=${COMMIT_SHA}" >> $GITHUB_OUTPUT
-
-      - name: Ensure tag commit is on main
-        id: onmain
-        shell: bash
-        run: |
-          git remote set-url origin "${{ github.server_url }}/${{ github.repository }}.git"
-          git fetch origin main --depth=1 || git fetch origin main --prune
-          if git merge-base --is-ancestor "${{ steps.taginfo.outputs.tag_commit_sha }}" origin/main; then
-            echo "reachable=true" >> $GITHUB_OUTPUT
-          else
-            echo "reachable=false" >> $GITHUB_OUTPUT
+            echo "Tagged commit $TAG_COMMIT is not on main. Skipping." >&2
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Show gate evaluation
-        shell: bash
-        run: |
-          echo "Tag object type: ${{ steps.taginfo.outputs.tag_object_type }}"
-          echo "Tag commit: ${{ steps.taginfo.outputs.tag_commit_sha }}"
-          echo "Commit reachable from main: ${{ steps.onmain.outputs.reachable }}"
-
+  checks:
+    needs: [guard]
+    if: needs.guard.outputs.eligible == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Set up Go
-        if: ${{ steps.taginfo.outputs.tag_object_type == 'tag' && steps.onmain.outputs.reachable == 'true' }}
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
-
-      - name: Build
-        if: ${{ steps.taginfo.outputs.tag_object_type == 'tag' && steps.onmain.outputs.reachable == 'true' }}
+          go-version: '1.24.x'
+          cache: true
+      - name: Verify build
         run: go build ./...
-
-      - name: Test
-        if: ${{ steps.taginfo.outputs.tag_object_type == 'tag' && steps.onmain.outputs.reachable == 'true' }}
+      - name: Run tests
         run: go test ./...
 
-      - name: Log in to GHCR
-        if: ${{ steps.taginfo.outputs.tag_object_type == 'tag' && steps.onmain.outputs.reachable == 'true' }}
-        uses: docker/login-action@v3
+  build-and-deploy:
+    needs: [checks]
+    if: needs.guard.outputs.eligible == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Get all history for proper versioning
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract version info
-        if: ${{ steps.taginfo.outputs.tag_object_type == 'tag' && steps.onmain.outputs.reachable == 'true' }}
+      - name: Extract metadata
         id: meta
-        shell: bash
+        uses: docker/metadata-action@v4
+        with:
+          images: ghcr.io/kapparina/ticketsplease
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=ref,event=branch
+            type=sha,format=short
+
+      - name: Get commit hash
+        id: commit
+        run: echo "hash=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Get git tag
+        id: git_tag
         run: |
-          TAG_NAME="${GITHUB_REF_NAME}"
-          SHORT_SHA=$(git rev-parse --short HEAD)
-          echo "version=$TAG_NAME" >> $GITHUB_OUTPUT
-          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          if git describe --tags --exact-match HEAD 2>/dev/null; then
+            GIT_TAG=$(git describe --tags --exact-match HEAD)
+          else
+            GIT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "no-tag")
+          fi
+          echo "tag=$GIT_TAG" >> $GITHUB_OUTPUT
+
+      - name: Get version
+        id: version
+        run: |
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+          else
+            VERSION=dev
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
-        if: ${{ steps.taginfo.outputs.tag_object_type == 'tag' && steps.onmain.outputs.reachable == 'true' }}
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v4
         with:
           context: .
           push: true
-          tags: |
-            ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.version }}
-            ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.short_sha }}
-            ghcr.io/${{ github.repository }}:main
           build-args: |
-            VERSION=${{ steps.meta.outputs.version }}
-            COMMIT=${{ steps.meta.outputs.short_sha }}
-            GIT_TAG=${{ steps.meta.outputs.version }}
+            VERSION=${{ steps.version.outputs.version }}
+            COMMIT=${{ steps.commit.outputs.hash }}
+            GIT_TAG=${{ steps.git_tag.outputs.tag }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      - name: Deploy via docker-compose on remote host
-        if: ${{ steps.taginfo.outputs.tag_object_type == 'tag' && steps.onmain.outputs.reachable == 'true' }}
-        uses: appleboy/ssh-action@v1.2.0
-        env:
-          IMAGE: ghcr.io/${{ github.repository }}:main
-          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+      - name: Install SSH key
+        uses: shimataro/ssh-key-action@v2
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SSH_PORT }}
-          script_stop: true
-          script: |
-            set -euo pipefail
-            mkdir -p ~/ticketsplease
-            cd ~/ticketsplease
-            cat > .env <<EOF
-            TicketsPleaseBotToken=${DISCORD_BOT_TOKEN}
-            EOF
-            cat > docker-compose.yml <<'YML'
-            services:
-              ticketsplease:
-                image: ${IMAGE}
-                restart: unless-stopped
-                environment:
-                  - TicketsPleaseBotToken=${TicketsPleaseBotToken}
-                command: ["-config","/var/lib/config.toml","-sync-commands","true"]
-                volumes:
-                  - ./config.toml:/var/lib/config.toml
-            YML
-            if [ ! -f config.toml ]; then
-              cat > config.toml <<'CTOML'
-              [log]
-              level = "info"
-              format = "text"
-              add_source = true
+          known_hosts: unnecessary
+          if_key_exists: replace
 
-              [bot]
-              dev_guilds = []
-              CTOML
-            fi
-            docker login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
-            docker pull ${IMAGE}
-            docker compose up -d
+      - name: Adding Known Hosts
+        run: ssh-keyscan -p ${{ secrets.SSH_PORT }} -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Skip notice (not annotated or not on main)
-        if: ${{ !(steps.taginfo.outputs.tag_object_type == 'tag' && steps.onmain.outputs.reachable == 'true') }}
+      - name: Create deployment directory
         run: |
-          echo "Skipping build/deploy because conditions not met: requires an annotated tag pointing to a commit reachable from main."
+          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} "mkdir -p ~/ticketsplease"
+
+      - name: Deploy docker-compose.yml
+        run: |
+          scp -P ${{ secrets.SSH_PORT }} docker-compose.yml ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:~/ticketsplease/
+
+      - name: Create .env file with Discord Token
+        run: |
+          echo "TicketsPleaseBotToken=${{ secrets.DISCORD_BOT_TOKEN }}" > .env
+          scp -P ${{ secrets.SSH_PORT }} .env ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:~/ticketsplease/
+          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} "chmod 600 ~/ticketsplease/.env"
+
+      - name: Create config file
+        run: |
+          cat > config.toml << EOF
+          [Bot]
+          DevGuilds = ["${{ secrets.DEV_GUILD_IDS }}"]
+
+          [Log]
+          Format = "text"
+          Level = "info"
+          AddSource = false
+          EOF
+          scp -P ${{ secrets.SSH_PORT }} config.toml ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:~/ticketsplease/
+
+      - name: Deploy and start service
+        run: |
+          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} "cd ~/ticketsplease && docker-compose pull && docker-compose up -d"

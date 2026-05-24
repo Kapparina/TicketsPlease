@@ -41,7 +41,7 @@ type Bot struct {
 func (b *Bot) SetupBot(listeners ...bot.EventListener) error {
 	slog.Info("Setting up bot...", slog.Any("version", b.Version), slog.Any("commit", b.Commit), slog.Any("tag", b.GitTag))
 	client, err := disgo.New(
-		os.Getenv("TicketsPleaseBotToken"),
+		os.Getenv("TICKETS_PLEASE_BOT_TOKEN"),
 		bot.WithGatewayConfigOpts(gateway.WithIntents(gateway.IntentsGuild, gateway.IntentGuildMessages, gateway.IntentMessageContent)),
 		bot.WithCacheConfigOpts(cache.WithCaches(cache.FlagGuilds)),
 		bot.WithEventListeners(b.Paginator),

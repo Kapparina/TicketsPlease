@@ -57,13 +57,13 @@ add_source = true
 # add guild ids the commands should sync to; leave empty to sync globally
 # example: dev_guilds = ["123456789012345678", "987654321098765432"]
 dev_guilds = []
-# optional token field present in config but NOT used at runtime by the bot, which reads the token from the environment variable TicketsPleaseBotToken instead
+# optional token field present in config but NOT used at runtime by the bot, which reads the token from the environment variable TICKETS_PLEASE_BOT_TOKEN instead
 # token = "..."
 ```
 
 Environment variables:
 
-- `TicketsPleaseBotToken`: the Discord bot token used by the application at runtime
+- `TICKETS_PLEASE_BOT_TOKEN`: the Discord bot token used by the application at runtime
 
 Security note: Avoid committing real tokens to source control. This project reads the token from an environment variable
 and ignores the `bot.token` field at runtime.
@@ -84,7 +84,7 @@ and ignores the `bot.token` field at runtime.
 
 1. Set your bot token in the environment (PowerShell):
     ```powershell
-    $Env:TicketsPleaseBotToken = "your-bot-token"
+    $Env:TICKETS_PLEASE_BOT_TOKEN = "your-bot-token"
     ```
 2. Ensure `config.toml` exists (or provide a custom path). Adjust `[log]` and `[bot.dev_guilds]` as needed.
 3. Run the bot:
@@ -111,17 +111,17 @@ Run the container:
 - PowerShell:
 
 ```powershell
-docker run --rm -e TicketsPleaseBotToken=$Env:TicketsPleaseBotToken -v ${PWD}\config.toml:/config/config.toml ticketsplease:local -config /config/config.toml -sync-commands=true
+docker run --rm -e TICKETS_PLEASE_BOT_TOKEN=$Env:TICKETS_PLEASE_BOT_TOKEN -v ${PWD}\config.toml:/config/config.toml ticketsplease:local -config /config/config.toml -sync-commands=true
 ```
 
 ### Docker Compose
 
-A [compose.yml](compose.yml) is provided. It expects the `TicketsPleaseBotToken` environment variable in your shell environment.
+A [compose.yml](compose.yml) is provided. It expects the `TICKETS_PLEASE_BOT_TOKEN` environment variable in your shell environment.
 
 - PowerShell:
 
 ```powershell
-$Env:TicketsPleaseBotToken = "your-bot-token"
+$Env:TICKETS_PLEASE_BOT_TOKEN = "your-bot-token"
 docker compose up -d
 ```
 
@@ -144,13 +144,13 @@ locally built image if preferred.
 	- Tags include: semantic versioning (on tags), major.minor, branch names, and short SHA. You can pin `docker compose` to a specific
 	  tag (e.g. `v1.2.3` or `:<short-sha>`) instead of `:main`.
 - Required GitHub Secrets for deployment:
-	- `DISCORD_BOT_TOKEN`: bot token (written to `.env` as `TicketsPleaseBotToken`)
+	- `DISCORD_BOT_TOKEN`: bot token (written to `.env` as `TICKETS_PLEASE_BOT_TOKEN`)
 	- `SSH_PRIVATE_KEY`, `SSH_HOST`, `SSH_PORT`, `SSH_USERNAME`: for SSH access to the deployment host
 - Required GitHub Variables for deployment:
 	- `DEPLOYMENT_DIR`: the directory on the host where the bot will be deployed (e.g. `/home/user/ticketsplease`)
 - Files deployed
 	- [compose.yml](./compose.yml) is copied to the configured `DEPLOYMENT_DIR` on the host.
-	- *.env* is created with `TicketsPleaseBotToken` and `IMAGE_TAG`.
+	- *.env* is created with `TICKETS_PLEASE_BOT_TOKEN` and `IMAGE_TAG`.
 	- The bot uses the bundled `/config/config.toml` by default (see [config.example.toml](./config.example.toml)).
 	  To use a custom config, place a `config.toml` in your `DEPLOYMENT_DIR`; it will be mounted into the container.
 

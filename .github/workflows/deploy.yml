@@ -152,7 +152,7 @@ jobs:
 
       - name: Create .env file with runtime variables
         run: |
-          echo "TicketsPleaseBotToken=${{ secrets.DISCORD_BOT_TOKEN }}" > .env
+          echo "TICKETS_PLEASE_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }}" > .env
           echo "IMAGE_TAG=${{ steps.version.outputs.version }}" >> .env
           scp -P ${{ secrets.SSH_PORT }} .env ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:${{ vars.DEPLOYMENT_DIR }}/
           ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} "chmod 600 '${{ vars.DEPLOYMENT_DIR }}/.env'"

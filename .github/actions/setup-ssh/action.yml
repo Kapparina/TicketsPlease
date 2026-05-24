@@ -1,0 +1,26 @@
+# .github/actions/setup-ssh/action.yml
+name: Setup SSH
+description: Install SSH key and known host
+inputs:
+  ssh-private-key:
+    required: true
+    description: SSH private key
+  ssh-host:
+    required: true
+    description: SSH host
+  ssh-port:
+    required: true
+    description: SSH port
+runs:
+  using: composite
+  steps:
+    - name: Install SSH key
+      uses: shimataro/ssh-key-action@v2
+      with:
+        key: ${{ inputs.ssh-private-key }}
+        known_hosts: unnecessary
+        if_key_exists: replace
+    - name: Add known host
+      shell: bash
+      run: |
+        ssh-keyscan -p "${{ inputs.ssh-port }}" -H "${{ inputs.ssh-host }}" >> ~/.ssh/known_hosts

@@ -1,14 +1,10 @@
 name: Deploy Discord Bot
-
 on:
   push:
     tags: [ 'v*' ]
-  workflow_dispatch:  # Allows manual triggering
-
 permissions:
   contents: read
   packages: write
-
 jobs:
   guard:
     runs-on: ubuntu-latest
@@ -43,12 +39,11 @@ jobs:
             echo "Tagged commit $TAG_COMMIT is not on main. Skipping." >&2
             echo "eligible=false" >> "$GITHUB_OUTPUT"
           fi
-
   checks:
-    needs: [guard]
-    if: needs.guard.outputs.eligible == 'true'
     runs-on: ubuntu-latest
     environment: Release
+    outputs:
+      passed: ${{ steps.check_ssh_secret.outputs.passed }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -64,48 +59,31 @@ jobs:
       - name: Run tests
         run: go test ./...
       - name: Check SSH secret exists
+        id: check_ssh_secret
         run: |
           if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
-            echo "SSH_PRIVATE_KEY secret not set. Skipping SSH deployment."
-            exit 1
+            echo "SSH_PRIVATE_KEY secret not set. Final check not passed."
+            echo "passed=false" >> "$GITHUB_OUTPUT" 
+            exit 0
           fi
-          echo "SSH_PRIVATE_KEY secret set."
-          
-  build-and-deploy:
-    needs: [guard, checks]
-    if: needs.guard.outputs.eligible == 'true'
+          echo "SSH_PRIVATE_KEY secret set. Final check passed."
+          echo "passed=true" >> "$GITHUB_OUTPUT"
+  version-info:
+    needs: [ checks ]
+    if: needs.checks.outputs.passed == 'true'
     runs-on: ubuntu-latest
-    environment: Release
+    outputs:
+      hash: ${{ steps.commit.outputs.hash }}
+      tag: ${{ steps.git_tag.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Get all history for proper versioning
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/kapparina/ticketsplease
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,format=short
-
       - name: Get commit hash
         id: commit
         run: echo "hash=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-
       - name: Get git tag
         id: git_tag
         run: |
@@ -115,7 +93,6 @@ jobs:
             GIT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "no-tag")
           fi
           echo "tag=$GIT_TAG" >> $GITHUB_OUTPUT
-
       - name: Get version
         id: version
         run: |
@@ -125,49 +102,93 @@ jobs:
             VERSION=dev
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-
+  build-and-push-docker-image:
+    needs: [ guard, checks, version-info ]
+    if: needs.guard.outputs.eligible == 'true'
+    runs-on: ubuntu-latest
+    environment: Release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/kapparina/ticketsplease
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=short
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           build-args: |
-            VERSION=${{ steps.version.outputs.version }}
-            COMMIT=${{ steps.commit.outputs.hash }}
-            GIT_TAG=${{ steps.git_tag.outputs.tag }}
+            VERSION=${{ needs.version-info.outputs.version }}
+            COMMIT=${{ needs.version-info.outputs.hash }}
+            GIT_TAG=${{ needs.version-info.outputs.tag }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-
-      - name: Install SSH key
-        uses: shimataro/ssh-key-action@v2
+  remote-deployment:
+    needs: [ guard, checks, version-info, build-and-push-docker-image ]
+    if: (needs.guard.outputs.eligible == 'true' && needs.checks.outputs.passed == 'true')
+    runs-on: ubuntu-latest
+    environment: Release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up SSH
+        uses: ./.github/actions/setup-ssh
         with:
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          known_hosts: unnecessary
-          if_key_exists: replace
-
-      - name: Adding Known Hosts
-        run: ssh-keyscan -p ${{ secrets.SSH_PORT }} -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
-
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          ssh-host: ${{ secrets.SSH_HOST }}
+          ssh-port: ${{ secrets.SSH_PORT }}
       - name: Verify deployment directory exists
         run: |
-          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} \
-            "test -d '${{ vars.DEPLOYMENT_DIR }}'"
-
-      - name: Deploy compose.yml
+          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} "test -d '${{ vars.DEPLOYMENT_DIR }}'"
+      - name: Ensure compose.yml exists
         run: |
-          scp -P ${{ secrets.SSH_PORT }} compose.yml ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:${{ vars.DEPLOYMENT_DIR }}/
-
+          if ! ( \
+            ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} \
+            "test -f '${{ vars.DEPLOYMENT_DIR }}/compose.yml'"; \
+          ) then
+            scp -P ${{ secrets.SSH_PORT }} compose.yml ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:${{ vars.DEPLOYMENT_DIR }}/compose.yml
+          fi
+      - name: Ensure config.toml exists
+        run: |
+          if ! ( \
+            ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} \
+            "test -f '${{ vars.DEPLOYMENT_DIR }}/config.toml'"; \
+          ) then
+            scp -P ${{ secrets.SSH_PORT }} config.toml ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:${{ vars.DEPLOYMENT_DIR }}/config.toml
+          fi
+      - name: Check .env IMAGE_TAG
+        id: check_env
+        run: |
+          remote_image_tag="$(
+            ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} \
+            "test -f '${{ vars.DEPLOYMENT_DIR }}/.env' && grep -E '^IMAGE_TAG=' '${{ vars.DEPLOYMENT_DIR }}/.env' | cut -d '=' -f2- || true"
+          )"
+          if [ "$remote_image_tag" = "${{ needs.version-info.outputs.version }}" ]; then
+            echo "env_needs_update=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "env_needs_update=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Create .env file with runtime variables
+        if: steps.check_env.outputs.env_needs_update == 'true'
         run: |
           echo "TICKETS_PLEASE_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }}" > .env
-          echo "IMAGE_TAG=${{ steps.version.outputs.version }}" >> .env
-          scp -P ${{ secrets.SSH_PORT }} .env ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:${{ vars.DEPLOYMENT_DIR }}/
+          echo "IMAGE_TAG=${{ needs.version-info.outputs.version }}" >> .env
+          scp -P ${{ secrets.SSH_PORT }} .env ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:${{ vars.DEPLOYMENT_DIR }}/.env
           ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} "chmod 600 '${{ vars.DEPLOYMENT_DIR }}/.env'"
-
-      - name: Deploy and start service
-        run: |
-          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} \
-            "cd '${{ vars.DEPLOYMENT_DIR }}' && docker compose -f compose.yml pull && docker compose -f compose.yml up -d"

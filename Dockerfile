@@ -43,9 +43,10 @@ RUN apk add --no-cache ca-certificates \
     && adduser -S -G ticketsplease -h /nonexistent -s /sbin/nologin ticketsplease
 
 COPY --from=build /out/ticketsplease /usr/local/bin/ticketsplease
+COPY config.example.toml /config/config.toml
 
 USER ticketsplease:ticketsplease
 
 ENTRYPOINT ["/usr/local/bin/ticketsplease"]
 
-CMD ["-config", "/etc/ticketsplease/config.toml"]
+CMD ["-config", "/config/config.toml"]

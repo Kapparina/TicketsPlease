@@ -116,7 +116,7 @@ docker run --rm -e TicketsPleaseBotToken=$Env:TicketsPleaseBotToken -v ${PWD}\co
 
 ### docker-compose
 
-A [docker-compose.yml](./docker-compose.yml) is provided. It expects the TicketsPleaseBotToken env var in your shell environment.
+A [compose.yml](compose.yml) is provided. It expects the TicketsPleaseBotToken env var in your shell environment.
 
 - PowerShell:
 
@@ -148,7 +148,7 @@ locally built image if preferred.
     - SSH_PRIVATE_KEY, SSH_HOST, SSH_PORT, SSH_USERNAME: for SSH access to the deployment host
     - DEV_GUILD_IDS: comma-separated guild IDs for faster command sync during development (optional)
 - Files deployed
-    - docker-compose.yml is copied to ~/ticketsplease on the host.
+    - compose.yml is copied to ~/ticketsplease on the host.
     - .env is created with TicketsPleaseBotToken.
     - config.toml is created with sensible defaults.
       Note: the app expects lowercase TOML sections and keys like:

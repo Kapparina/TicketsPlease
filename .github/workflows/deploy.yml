@@ -131,6 +131,14 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Check SSH secret exists
+        run: |
+          if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
+            echo "SSH_PRIVATE_KEY secret not set. Skipping SSH deployment."
+            exit 1
+          fi
+          echo "SSH_PRIVATE_KEY secret set."
+
       - name: Install SSH key
         uses: shimataro/ssh-key-action@v2
         with:

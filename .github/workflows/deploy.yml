@@ -171,7 +171,7 @@ jobs:
             ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} \
             "test -f '${{ vars.DEPLOYMENT_DIR }}/config.toml'"; \
           ) then
-            scp -P ${{ secrets.SSH_PORT }} config.toml ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:${{ vars.DEPLOYMENT_DIR }}/config.toml
+            scp -P ${{ secrets.SSH_PORT }} config.example.toml ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:${{ vars.DEPLOYMENT_DIR }}/config.toml
           fi
       - name: Check .env IMAGE_TAG
         id: check_env

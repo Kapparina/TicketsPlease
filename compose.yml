@@ -1,0 +1,16 @@
+services:
+  bot:
+    container_name: ticketsplease
+    image: ghcr.io/kapparina/ticketsplease:${IMAGE_TAG:-main}
+    restart: unless-stopped
+    environment:
+      - TICKETS_PLEASE_BOT_TOKEN=${TICKETS_PLEASE_BOT_TOKEN}
+    volumes:
+      - ./config.toml:/config/config.toml:ro
+    command: -config=/config/config.toml --sync-commands=true
+    networks:
+      - ticketsplease
+
+networks:
+  ticketsplease:
+    name: tickets-please-discord-bot

@@ -141,33 +141,23 @@ jobs:
       - name: Adding Known Hosts
         run: ssh-keyscan -p ${{ secrets.SSH_PORT }} -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Create deployment directory
+      - name: Verify deployment directory exists
         run: |
-          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} "mkdir -p ~/ticketsplease"
+          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} \
+            "test -d '${{ vars.DEPLOYMENT_DIR }}'"
 
-      - name: Deploy docker-compose.yml
+      - name: Deploy compose.yml
         run: |
-          scp -P ${{ secrets.SSH_PORT }} docker-compose.yml ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:~/ticketsplease/
+          scp -P ${{ secrets.SSH_PORT }} compose.yml ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:${{ vars.DEPLOYMENT_DIR }}/
 
-      - name: Create .env file with Discord Token
+      - name: Create .env file with runtime variables
         run: |
-          echo "TicketsPleaseBotToken=${{ secrets.DISCORD_BOT_TOKEN }}" > .env
-          scp -P ${{ secrets.SSH_PORT }} .env ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:~/ticketsplease/
-          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} "chmod 600 ~/ticketsplease/.env"
-
-      - name: Create config file
-        run: |
-          cat > config.toml << EOF
-          [Bot]
-          DevGuilds = ["${{ secrets.DEV_GUILD_IDS }}"]
-
-          [Log]
-          Format = "text"
-          Level = "info"
-          AddSource = false
-          EOF
-          scp -P ${{ secrets.SSH_PORT }} config.toml ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:~/ticketsplease/
+          echo "TICKETS_PLEASE_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }}" > .env
+          echo "IMAGE_TAG=${{ steps.version.outputs.version }}" >> .env
+          scp -P ${{ secrets.SSH_PORT }} .env ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:${{ vars.DEPLOYMENT_DIR }}/
+          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} "chmod 600 '${{ vars.DEPLOYMENT_DIR }}/.env'"
 
       - name: Deploy and start service
         run: |
-          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} "cd ~/ticketsplease && docker-compose pull && docker-compose up -d"
+          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} \
+            "cd '${{ vars.DEPLOYMENT_DIR }}' && docker compose -f compose.yml pull && docker compose -f compose.yml up -d"

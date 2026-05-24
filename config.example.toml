@@ -1,0 +1,7 @@
+[log]
+format = "text"
+level = "info"
+add_source = false
+
+[bot]
+dev_guilds = []

@@ -7,26 +7,27 @@ A Discord ticket manager bot built with [disgo](https://github.com/disgoorg/disg
 slash commands. The bot automatically creates or maintains a "support-tickets" text channel and starts a private thread
 per ticket with sensible permission overrides for moderation roles and restricted default (everyone) access.
 
-Key technologies: [Go](https://go.dev), [disgo](https://github.com/disgoorg/disgo), [paginator](https://github.com/disgoorg/paginator), [TOML](https://toml.io/en/) configuration, [Docker](https://www.docker.com/).
+Key technologies: [Go](https://go.dev), [disgo](https://github.com/disgoorg/disgo), [paginator](https://github.com/disgoorg/paginator), [TOML](https://toml.io/en/)
+configuration, [Docker](https://www.docker.com/).
 
 ## ✨ Features
 
 - Slash commands
-    - `/ticket`: create a private ticket thread under the support-tickets channel
-    - `/version`: show running version and commit
-    - `/test`: demo command with autocomplete and a demo button component
+	- `/ticket`: create a private ticket thread under the support-tickets channel
+	- `/version`: show running version and commit
+	- `/test`: demo command with autocomplete and a demo button component
 - Ticket flow
-    - Ensures a text channel named "support-tickets" exists (creates or updates it)
-    - Creates a private thread per ticket: `<username> - <subject> | (<category>)`
-    - Adds the requesting user to the thread
+	- Ensures a text channel named "support-tickets" exists (creates or updates it)
+	- Creates a private thread per ticket: `<username> - <subject> | (<category>)`
+	- Adds the requesting user to the thread
 - Categories (support & suggestions)
-    - Predefined `baseChoices`, e.g. `general-support`, `mod-support`, `staff-support`, etc.
+	- Predefined `baseChoices`, e.g. `general-support`, `mod-support`, `staff-support`, etc.
 - Role-based permissions
-    - Moderation roles (have `ViewAuditLog` + `ManageMessages`) get thread permissions
-    - Everyone (guild) role is restricted from sending messages in the parent channel; threads are used for
-      conversations
+	- Moderation roles (have `ViewAuditLog` + `ManageMessages`) get thread permissions
+	- Everyone (guild) role is restricted from sending messages in the parent channel; threads are used for
+	  conversations
 - Command sync
-    - Supports rapid iteration via guild-scoped sync (dev_guilds) or global registration
+	- Supports rapid iteration via guild-scoped sync (dev_guilds) or global registration
 - Logging with configurable level and format
 
 ## 📋 Requirements
@@ -71,11 +72,11 @@ and ignores the `bot.token` field at runtime.
 
 - `/help`: shows a help message and explains how to create a ticket
 - `/ticket`
-    - Options:
-        - `category` (string choice; autocomplete): one of predefined categories
-        - `subject` (string): 10 to 100 characters
-        - `content` (string): 10 to 1000 characters
-        - `attachment` (optional)
+	- Options:
+		- `category` (string choice; autocomplete): one of predefined categories
+		- `subject` (string): 10 to 100 characters
+		- `content` (string): 10 to 1000 characters
+		- `attachment` (optional)
 - `/version`: shows bot version, git tag (if available), and commit
 - `/test`: demo command with autocomplete and a button labelled "test" (updates the message on click)
 
@@ -126,37 +127,43 @@ docker compose up -d
 
 It mounts `./config.toml` into the container at `/config/config.toml` and passes flags: `-config=/config/config.toml --sync-commands=true`
 
-Note: The provided [compose](./compose.yml) file references the image [ghcr.io/kapparina/ticketsplease:main](https://github.com/users/kapparina/packages/container/package/ticketsplease). You can modify it to use your
+Note: The provided [compose](./compose.yml) file references the image [ghcr.io/kapparina/ticketsplease:main](https://github.com/users/kapparina/packages/container/package/ticketsplease). You
+can modify it to use your
 locally built image if preferred.
 
 ## 🚀 CI/CD and Deployment
 
 - Workflows
-    - Docker build (Docker workflow): builds multi-arch images and pushes to [GHCR](https://ghcr.io). Version metadata is embedded via
-      build arguments: VERSION, COMMIT (short SHA), and GIT_TAG. These are shown by `/version` and in startup logs.
-    - Deploy (Deploy Discord Bot workflow): triggers on pushes to main and tags matching v*. It first runs checks (go
-      build and go test).
-      Only if they pass, it builds and pushes the image and then deploys via SSH to your host using
-      [Docker Compose](https://docs.docker.com/compose/).
+	- Docker build (Docker workflow): builds multi-arch images and pushes to [GHCR](https://ghcr.io). Version metadata is embedded via
+	  build arguments: VERSION, COMMIT (short SHA), and GIT_TAG. These are shown by `/version` and in startup logs.
+	- Deploy (Deploy Discord Bot workflow): triggers on pushes to main and tags matching v*. It first runs checks (go
+	  build and go test).
+	  Only if they pass, it builds and pushes the image and then deploys via SSH to your host using
+	  [Docker Compose](https://docs.docker.com/compose/).
 - Image tags
-    - Tags include: semantic versioning (on tags), major.minor, branch names, and short SHA. You can pin `docker compose` to a specific
-      tag (e.g. `v1.2.3` or `:<short-sha>`) instead of `:main`.
+	- Tags include: semantic versioning (on tags), major.minor, branch names, and short SHA. You can pin `docker compose` to a specific
+	  tag (e.g. `v1.2.3` or `:<short-sha>`) instead of `:main`.
 - Required GitHub Secrets for deployment:
-    - `DISCORD_BOT_TOKEN`: bot token (written to `.env` as `TicketsPleaseBotToken`)
-    - `SSH_PRIVATE_KEY`, `SSH_HOST`, `SSH_PORT`, `SSH_USERNAME`: for SSH access to the deployment host
+	- `DISCORD_BOT_TOKEN`: bot token (written to `.env` as `TicketsPleaseBotToken`)
+	- `SSH_PRIVATE_KEY`, `SSH_HOST`, `SSH_PORT`, `SSH_USERNAME`: for SSH access to the deployment host
 - Required GitHub Variables for deployment:
-    - `DEPLOYMENT_DIR`: the directory on the host where the bot will be deployed (e.g. `/home/user/ticketsplease`)
+	- `DEPLOYMENT_DIR`: the directory on the host where the bot will be deployed (e.g. `/home/user/ticketsplease`)
 - Files deployed
-    - [compose.yml](./compose.yml) is copied to the configured `DEPLOYMENT_DIR` on the host.
-    - *.env* is created with `TicketsPleaseBotToken` and `IMAGE_TAG`.
-    - The bot uses the bundled `/config/config.toml` by default (see [config.example.toml](./config.example.toml)).
-      To use a custom config, place a `config.toml` in your `DEPLOYMENT_DIR`; it will be mounted into the container.
+	- [compose.yml](./compose.yml) is copied to the configured `DEPLOYMENT_DIR` on the host.
+	- *.env* is created with `TicketsPleaseBotToken` and `IMAGE_TAG`.
+	- The bot uses the bundled `/config/config.toml` by default (see [config.example.toml](./config.example.toml)).
+	  To use a custom config, place a `config.toml` in your `DEPLOYMENT_DIR`; it will be mounted into the container.
 
 ## 🛠️ Development Notes
 
 - Module path and image references use [github.com/kapparina/ticketsplease](https://github.com/kapparina/ticketsplease); keep this in mind when forking/renaming.
 - Gateway intents used: `Guilds`, `GuildMessages`, `MessageContent`. Enable them in the [Discord Developer Portal](https://discord.com/developers/applications) for your bot.
 - Logging is set up via [slog](https://pkg.go.dev/log/slog); formats: text or JSON.
+
+## 🤖 AI/LLM Usage
+
+Documentation (namely this file) has been written with assistance from various LLMs, chiefly JetBrains Junie. As a result, some sections may be inconsistent.
+Source code should **always** be considered the source of truth.
 
 ## 📄 Licence
 

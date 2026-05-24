@@ -4,7 +4,8 @@ WORKDIR /build
 
 COPY go.mod go.sum ./
 
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
 COPY . .
 
@@ -15,16 +16,36 @@ ARG GIT_TAG=unknown
 ARG COMMIT=unknown
 
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    --mount=type=cache,target=/go/pkg \
+    --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 \
     GOOS=$TARGETOS \
     GOARCH=$TARGETARCH \
-    go build -ldflags="-X 'main.Version=${VERSION}' -X 'main.Commit=${COMMIT}' -X 'main.GitTag=${GIT_TAG}'" -o bot github.com/kapparina/ticketsplease
+    go build \
+      -trimpath \
+      -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.Commit=${COMMIT}' -X 'main.GitTag=${GIT_TAG}'" \
+      -o /out/ticketsplease \
+      github.com/kapparina/ticketsplease
 
-FROM alpine
+FROM alpine:3.20
 
-COPY --from=build /build/bot /bin/bot
+ARG VERSION=dev
+ARG GIT_TAG=unknown
+ARG COMMIT=unknown
 
-ENTRYPOINT ["/bin/bot"]
+LABEL org.opencontainers.image.title="TicketsPlease" \
+      org.opencontainers.image.description="Discord ticket manager bot" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${COMMIT}" \
+      org.opencontainers.image.source="https://github.com/kapparina/ticketsplease"
 
-CMD ["-config", "/var/lib/config.toml"]
+RUN apk add --no-cache ca-certificates \
+    && addgroup -S ticketsplease \
+    && adduser -S -G ticketsplease -h /nonexistent -s /sbin/nologin ticketsplease
+
+COPY --from=build /out/ticketsplease /usr/local/bin/ticketsplease
+
+USER ticketsplease:ticketsplease
+
+ENTRYPOINT ["/usr/local/bin/ticketsplease"]
+
+CMD ["-config", "/etc/ticketsplease/config.toml"]

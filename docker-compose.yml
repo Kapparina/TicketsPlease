@@ -1,6 +1,6 @@
 services:
   bot:
-    image: ghcr.io/kapparina/ticketsplease:main
+    image: ghcr.io/kapparina/ticketsplease:${IMAGE_TAG:-main}
     restart: unless-stopped
     environment:
       - TicketsPleaseBotToken=${TicketsPleaseBotToken}

@@ -149,9 +149,10 @@ jobs:
         run: |
           scp -P ${{ secrets.SSH_PORT }} docker-compose.yml ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:~/ticketsplease/
 
-      - name: Create .env file with Discord Token
+      - name: Create .env file with runtime variables
         run: |
           echo "TicketsPleaseBotToken=${{ secrets.DISCORD_BOT_TOKEN }}" > .env
+          echo "IMAGE_TAG=${{ steps.version.outputs.version }}" >> .env
           scp -P ${{ secrets.SSH_PORT }} .env ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:~/ticketsplease/
           ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} "chmod 600 ~/ticketsplease/.env"
 
